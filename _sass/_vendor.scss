@@ -1,0 +1,89 @@
+@font-face {
+    font-family: 'tt-regular';
+    src: url('../fonts/tt-regular-webfont.woff2') format('woff2'),
+         url('../fonts/tt-regular-webfont.woff') format('woff');
+    font-weight: normal;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'tt-medium';
+    src: url('../fonts/tt-medium-webfont.woff2') format('woff2'),
+         url('../fonts/tt-medium-webfont.woff') format('woff');
+    font-weight: normal;
+    font-style: normal;
+}
+
+$font--open-sans--reg: 'tt-regular', "Helvetica Neue", Helvetica, Arial, sans-serif;
+$font--open-sans--semi: 'tt-medium', "Helvetica Neue", Helvetica, Arial, sans-serif;
+
+#carbonads {
+  border-radius: 4px;
+  display: block;
+  overflow: hidden;
+  padding: 25px 20px;
+  border: 1px solid #e6e9f3;
+  background: #f7f8fb;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+#carbonads a {
+  color: inherit;
+}
+
+#carbonads a:hover {
+  color: inherit;
+}
+
+#carbonads span {
+  display: block;
+  overflow: hidden;
+}
+
+.carbon-img {
+  display: block;
+  margin: 0 auto 1em;
+}
+
+.carbon-text {
+  display: block;
+  margin-bottom: 1em;
+}
+
+.carbon-poweredby {
+  display: block;
+  text-transform: uppercase;
+  font-size: 8px;
+}
+
+// @media only screen and (min-width: 320px) and (max-width: 759px) {
+//   #carbonads {
+//     float: none;
+//     margin: 0 auto;
+//     max-width: 330px;
+//   }
+//   #carbonads span {
+//     position: relative;
+//   }
+//   #carbonads > span {
+//     max-width: none;
+//   }
+//   .carbon-img {
+//     float: left;
+//     margin: 0 1em 0 0;
+//   }
+//   .carbon-text {
+//     float: left;
+//     margin-bottom: 0;
+//     max-width: calc(100% - 130px - 1em);
+//     text-align: left;
+//   }
+//   .carbon-poweredby {
+//     position: absolute;
+//     right: 0;
+//     bottom: 0;
+//     display: block;
+//   }
+// }

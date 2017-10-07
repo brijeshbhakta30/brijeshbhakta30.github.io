@@ -1,0 +1,21 @@
+---
+layout: default
+permalink: /categories/react
+---
+
+{% include components/categories.html %}
+
+{%
+	include components/category-title.html
+	category="ReactJS"
+	icon="react"
+	text="All articles on ReactJS, A JavaScript library for building user interfaces"
+%}
+
+<div class="posts">
+	{% for post in site.posts %}
+		{% if post.tag == 'react' %}
+			{% include components/post-card.html %}
+		{% endif %}
+  {% endfor %}
+</div>
