@@ -1,0 +1,142 @@
+---
+layout: default
+---
+
+{% include components/categories.html %}
+
+<article class="post single">
+  <section class="post__content">
+    <div class="post__detail">
+    <header class="post__header">
+      <h1 class="alpha post__title" itemprop="name headline">
+        {{ page.title }}
+        <div class="post-card__container">
+          <div class="post-card__meta">
+            <div class="post-card__tag">
+              <img src="{{ site.baseurl }}/img/tags/{% if page.tag %}{{ page.tag }}{% else %}tag{% endif %}.svg" alt="">
+            </div>
+            {{ page.date | date: "%b %-d, %Y" }}
+          </div>
+          <div class="post-card__meta">
+            <div class="post-card__tag">
+              <img src="{{ site.baseurl }}/img/tags/time.svg" alt="">
+            </div>
+            {% assign words = content | strip_html | number_of_words %}
+            {% if words < 360 %}
+              1 min read
+            {% else %}
+              {{ words | divided_by:200 }} mins read
+            {% endif %}
+          </div>
+          <div class="post-card__meta">
+            <div class="post-card__tag">
+              <img src="{{ site.baseurl }}/img/icons/github-dark.svg" alt="">
+            </div>
+            {% if page.path %}
+            <a class="post-card-edit" href="//github.com/brijeshbhakta30/brijeshbhakta30.github.io/blob/master/{{ page.path }}">
+              Edit post
+            </a>
+            {% endif %}
+          </div>
+          <!--<div class="post-card__meta">
+            <div class="post-card__tag">
+              <img src="{{ site.baseurl }}/img/icons/comments.svg" alt="">
+            </div>
+            <span class="disqus-comment-count" data-disqus-url="http://toddmotto.com{{ page.url }}"></span>
+          </div>-->
+        </div>
+      </h1>
+      <div class="post__meta__divider"></div>
+    </header>
+      {{ content }}
+    </div>
+
+    <div class="post__sidebar">
+      {% include components/featured-course.html %}
+      <div>
+        <script async src="//cdn.carbonads.com/carbon.js?zoneid=1696&serve=CVYD42T&placement=toddmottocom" id="_carbonads_js"></script>
+      </div>
+    </div>
+
+  </section>
+</article>
+
+<div class="share">
+  <h4 class="share__title">Enjoy this post? Share it!</h4>
+  <p>
+    Lots of time and effort goes into all my blogs, resources and demos,
+    I'd love if you'd spare a moment to share them!
+  </p>
+  <div class="addthis_inline_share_toolbox"></div>
+  <script src="//s7.addthis.com/js/300/addthis_widget.js#pubid=ra-5964f0f2d6581bc8"></script>
+</div>
+
+{% include courses-alt.html %}
+
+<div class="post__ending">
+
+  {% if page.previous.url %}
+    <div class="post-card">
+      <a href="{{ page.previous.url | prepend: site.baseurl }}" class="post-card__content" title="Read {{ page.previous.title }}">
+        <div class="post-card__meta">
+          <div class="post-card__tag">
+            <img src="{{ site.baseurl }}/img/tags/{% if page.previous.tag %}{{ page.previous.tag }}{% else %}tag{% endif %}.svg" alt="">
+          </div>
+          {{ page.previous.date | date: "%b %-d, %Y" }}
+        </div>
+        <h2 class="post-card__title">
+          {{ page.previous.title }}
+        </h2>
+        <p>
+          {{ page.previous.content | markdownify | strip_html | truncatewords: 15 }}
+        </p>
+      </a>
+    </div>
+  {% endif %}
+  {% if page.next.url %}
+    <div class="post-card">
+      <a href="{{ page.next.url | prepend: site.baseurl }}" class="post-card__content" title="Read {{ page.next.title }}">
+        <div class="post-card__meta">
+          <div class="post-card__tag">
+            <img src="{{ site.baseurl }}/img/tags/{% if page.next.tag %}{{ page.next.tag }}{% else %}tag{% endif %}.svg" alt="">
+          </div>
+          {{ page.next.date | date: "%b %-d, %Y" }}
+        </div>
+        <h2 class="post-card__title">
+          {{ page.next.title }}
+        </h2>
+        <p>
+          {{ page.next.content | markdownify | strip_html | truncatewords: 15 }}
+        </p>
+      </a>
+    </div>
+  {% endif %}
+
+  <!--<div class="author">
+    <div class="author__content">
+      <div class="author__pic">
+        <img src="{{ site.baseurl }}/img/brijesh.jpg" alt="Brijesh Bhakta">
+      </div>
+      <div class="author__bio">
+        <p>
+          I'm Todd, I teach Angular to developers and teams worldwide through <a href="https://ultimateangular.com">Ultimate Angular</a>.
+          Conference speaker and <a href="//developers.google.com/experts/people/todd-motto">Developer Expert</a> at Google.
+        </p>
+        <a href="https://twitter.com/toddmotto" class="twitter-follow-button" data-show-count="true"></a>
+      </div>
+    </div>-->
+  </div>
+</div>
+
+<div class="disqus">
+  <div id="disqus_thread"></div>
+</div>
+<!--<script id="dsq-count-scr" src="//toddmotto.disqus.com/count.js" async></script>-->
+<script>
+  var disqus_url = ({% if page.disqus %}'{{ page.disqus }}'{% else %}'http://toddmotto.com{{ page.url }}'{% endif %}).replace(/\/$/, '');
+  var disqus_title = '{{ page.title }}';
+  var disqus_shortname = 'toddmotto';
+  var dsq = document.createElement('script');
+  dsq.async = dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+  document.getElementsByTagName('head')[0].appendChild(dsq);
+</script>
