@@ -40,6 +40,3 @@ yarn start
 
 This will start serving the project from `localhost:4000`, with livereload functionality.
 
-### Notes
-
-Despite being open sourced, all code and content remain copyright of Todd Motto. Please don't steal!
