@@ -31,6 +31,8 @@ const paths = {
   dist: 'js/'
 };
 
+const isWin = /^win/.test(process.platform);
+
 browserSync.create();
 
 gulp.task('clean', fn => del([paths.dist, siteRoot], fn));
@@ -49,7 +51,7 @@ gulp.task('scripts', ['clean'], () => {
 });
 
 gulp.task('jekyll', () => {
-  const jekyll = child.spawn('jekyll', ['serve', '--watch', '--incremental', '--drafts']);
+  const jekyll = child.spawn(isWin ? 'jekyll.bat' : 'jekyll', ['serve', '--watch', '--incremental', '--drafts']);
   jekyll.stdout.on('data', jekyllLogger);
   jekyll.stderr.on('data', jekyllLogger);
 });
