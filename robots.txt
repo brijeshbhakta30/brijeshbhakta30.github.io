@@ -1,3 +1,3 @@
 User-agent: *
-Sitemap: http://toddmotto.com/sitemap.xml
+Sitemap: http://brijeshbhakta.com/sitemap.xml
 Disallow:

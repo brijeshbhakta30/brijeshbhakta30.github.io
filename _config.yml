@@ -4,7 +4,7 @@ email: brijeshbhakta30@gmail.com
 description: > # this means to ignore newlines until "baseurl:"
   Articles on JavaScript, Angular and React
 baseurl: "" # the subpath of your site, e.g. /blog
-url: "http://localhost:4000" # the base hostname & protocol for your site
+url: "http://brijeshbhakta.com" # the base hostname & protocol for your site
 twitter_username: brijesh_bhakta
 github_username:  brijeshbhakta30
 include: [_pages]
