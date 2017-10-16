@@ -292,3 +292,99 @@ const calculations = {
     }
 }
 ```
+
+### Template Literals
+
+Template literals are string literals which allow the usage of embedded expressions. Those expressins can be anything that can have a computed value.
+
+While strings are enclosed in single or double quotes, template literals are enclosed by back-ticks (``). Template literals can have place holders. Place holders are indicated by the Dollar sign followed by the curly braces `${expression}`.
+
+Some examples:
+
+```js
+console.log(`This is plain string`);
+
+const a = 5, b = 10;
+console.log('The number is ' + a + '.'); // The number is 5.
+console.log(`The number is ${a}.`); // The number is 5.
+
+console.log('The addition of a and b is ' + (a + b) + '.'); // The number is 15.
+// Simple expression
+console.log(`The addition of a and b is ${a + b}.`); // The number is 15.
+
+function add(a, b) {
+	return a + b;
+}
+
+// Calling a function
+console.log(`The addition of a and b is ${add(a, b)}.`); // The number is 15.
+
+// Using ternary operator.
+console.log(`The addition of the numbers a and b is ${add(a, b) % 2 === 0 ? 'even' : 'odd'}.`);
+
+// Multi line 
+
+// Without template literals
+console.log('Text from line 1\n' +
+'Text from line 2');
+// Text from line 1
+// Text from line 2
+
+// With template literals
+console.log(`Text from line 1
+Text from line 2`);
+// Text from line 1
+// Text from line 2
+```
+### Iterators
+
+ES6 gives many inbuilt functions to iterate over the arrays. This functions are fast and can avoid potential bugs or errors.
+Do not use any loop to iterate over the array like `for-of, for` etc.
+
+   > Use `map()` / `every()` / `filter()` / `find()` / `findIndex()` / `reduce()` / `some()` / ... to iterate over arrays, and `Object.keys()` / `Object.values()` / `Object.entries()` to produce arrays so you can iterate over objects.
+
+Documentation for above methods can be found on [mozilla](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array).
+
+Some examples: 
+
+```js
+const numbers = [1, 2, 3, 4, 5];
+
+let sum = 0;
+numbers.forEach((num) => {
+  sum += num;
+});
+// sum = 15;
+
+// Make use of the methods to improve code
+const sum = numbers.reduce((total, num) => total + num, 0);
+// sum = 15;
+
+const increasedNumbers = numbers.map(num => num + 1);
+// increasedNumbers = [2, 3, 4, 5, 6];
+```
+
+### Promises
+
+ES6 brings built in promises in JavaScript. Many of you would be aware about the promises and why they come into existence.
+
+We will not dive deep into Promises itself but we will demonstrate examples of promises:
+
+```js
+// A function that returns a promise after some time
+
+// Without a promise constructor
+function asyncExample(waitTime = 3000) {
+	return setTimeout(() => Promise.resolve(), waitTime);
+}
+
+// With promise constructor
+function asyncExample(waitTime = 3000) {
+	// Prototype
+	// <Promise>(resolve, reject)
+	return new Promise((resolve) => setTimeout(resolve, waitTime));
+}
+
+asyncExample(5000).then(() => console.log('Will be logged after 5 secs.'));
+```
+There is much to be learned for the promises and luckly [Mozilla](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise) has a really good documentation.
