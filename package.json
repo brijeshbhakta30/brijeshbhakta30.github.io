@@ -1,7 +1,7 @@
 {
   "name": "brijeshbhakta30.github.io",
   "version": "2.0.0",
-  "packageManager": "pnpm@11.3.0",
+  "packageManager": "pnpm@11.24.0",
   "engines": {
     "node": ">=24"
   },
@@ -26,22 +26,22 @@
   "author": "Brijesh Bhakta",
   "homepage": "https://brijeshbhakta.com",
   "dependencies": {
-    "@astrojs/check": "^0.9.4",
-    "@astrojs/sitemap": "^3.6.0",
-    "@tailwindcss/vite": "^4.1.12",
-    "astro": "^5.13.5",
-    "peerjs": "^1.5.5",
-    "sharp": "^0.34.3",
-    "tailwindcss": "^4.1.12",
-    "typescript": "^5.9.2"
+    "@astrojs/check": "0.9.10",
+    "@astrojs/sitemap": "3.7.3",
+    "@tailwindcss/vite": "4.3.3",
+    "astro": "7.2.9",
+    "peerjs": "1.5.5",
+    "sharp": "0.35.4",
+    "tailwindcss": "4.3.3",
+    "typescript": "6.0.3"
   },
   "devDependencies": {
-    "@commitlint/cli": "^21.2.2",
-    "@commitlint/config-conventional": "^21.2.2",
-    "devmoji": "^2.3.0",
-    "husky": "^9.1.7",
-    "lint-staged": "^17.4.1",
-    "prettier": "^3.9.6",
-    "prettier-plugin-astro": "^0.14.1"
+    "@commitlint/cli": "21.2.2",
+    "@commitlint/config-conventional": "21.2.2",
+    "devmoji": "2.3.0",
+    "husky": "9.1.7",
+    "lint-staged": "17.4.1",
+    "prettier": "3.9.6",
+    "prettier-plugin-astro": "0.14.1"
   }
 }
