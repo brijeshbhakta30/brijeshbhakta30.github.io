@@ -48,7 +48,7 @@ const cards = ['0', '1', '2', '3', '5', '8', '13', '21', '?', '☕'];
             <label class="mb-2 block font-mono text-[0.75rem] tracking-[0.06em] uppercase" for="create-name">Your name</label>
             <input id="create-name" class="w-full border border-rule bg-background px-4 py-3 text-foreground outline-none placeholder:text-muted focus:border-accent" name="name" maxlength="32" autocomplete="name" placeholder="e.g. Brijesh" required />
             <label class="mt-4 mb-2 block font-mono text-[0.75rem] tracking-[0.06em] uppercase" for="create-room-code">Custom room ID <span class="text-muted">(optional)</span></label>
-            <input id="create-room-code" class="w-full border border-rule bg-background px-4 py-3 font-mono tracking-[0.08em] text-foreground uppercase outline-none placeholder:text-muted focus:border-accent" name="room" minlength="1" maxlength="32" pattern="[A-Z0-9]+" autocomplete="off" placeholder="Leave blank for a random ID" />
+            <input id="create-room-code" class="w-full border border-rule bg-background px-4 py-3 font-mono tracking-[0.08em] text-foreground uppercase outline-none placeholder:text-muted focus:border-accent" name="room" minlength="1" maxlength="32" pattern="[A-Za-z0-9]+" autocomplete="off" autocapitalize="characters" placeholder="Leave blank for a random ID" />
             <button class="mt-4 w-full cursor-pointer bg-accent px-5 py-3 font-mono text-[0.8rem] font-semibold tracking-[0.06em] text-background uppercase hover:bg-accent-hover" type="submit">Create room <span aria-hidden="true">↗</span></button>
           </form>
 
@@ -63,7 +63,7 @@ const cards = ['0', '1', '2', '3', '5', '8', '13', '21', '?', '☕'];
               </div>
               <div>
                 <label class="mb-2 block font-mono text-[0.75rem] tracking-[0.06em] uppercase" for="room-code">Room code</label>
-                <input id="room-code" class="w-full border border-rule bg-background px-4 py-3 font-mono tracking-[0.12em] text-foreground uppercase outline-none placeholder:text-muted focus:border-accent" name="room" minlength="1" maxlength="32" pattern="[A-Z0-9]+" autocomplete="off" placeholder="ABC1234" required />
+                <input id="room-code" class="w-full border border-rule bg-background px-4 py-3 font-mono tracking-[0.12em] text-foreground uppercase outline-none placeholder:text-muted focus:border-accent" name="room" minlength="1" maxlength="32" pattern="[A-Za-z0-9]+" autocomplete="off" autocapitalize="characters" placeholder="ABC1234" required />
               </div>
             </div>
             <button class="mt-4 w-full cursor-pointer border border-foreground px-5 py-3 font-mono text-[0.8rem] font-semibold tracking-[0.06em] uppercase hover:border-accent hover:text-accent" type="submit">Join room <span aria-hidden="true">→</span></button>
