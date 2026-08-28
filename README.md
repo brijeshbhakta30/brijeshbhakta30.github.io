@@ -50,7 +50,9 @@ Tailwind is connected through its Vite plugin. Design tokens, local font faces, 
 
 Future standalone tools can be added under `src/pages/tools/`. Tailwind scans files under `src` automatically, so utilities used by a new tool are included without any extra content configuration.
 
-The first tool is available at `/tools/scrum-poker`. It uses WebRTC data channels through PeerJS: the public PeerJS broker is used for signalling, but room state and votes are exchanged directly between participants and are never stored by this site. The facilitator's browser owns the live room state, so closing that tab ends the current session.
+The first tool is available at `/tools/scrum-poker`. It uses WebRTC data channels through PeerJS: the public PeerJS broker is used for signalling, but room state and votes are exchanged over encrypted WebRTC connections and are never stored by this site. The facilitator's browser owns the live room state, so closing that tab ends the current session.
+
+The default development configuration uses one Google STUN endpoint. Production deployments that need reliable connectivity across restrictive NATs can provide up to three comma-separated relay URLs through `PUBLIC_TURN_URLS`, with `PUBLIC_TURN_USERNAME` and `PUBLIC_TURN_CREDENTIAL` for authentication. Use credentials intended for browser clients, because Astro includes `PUBLIC_` values in the client bundle.
 
 ## Deployment
 
