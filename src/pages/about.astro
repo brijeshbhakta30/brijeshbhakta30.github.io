@@ -1,0 +1,27 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import portrait from '../assets/brijesh.jpg';
+---
+
+<BaseLayout title="About" description="About Brijesh Bhakta, a software engineer with 10 years of experience across backend, web, and mobile development." image={portrait.src}>
+  <header class="border-b border-rule pt-[clamp(4.5rem,9vw,9rem)] pb-[clamp(3rem,6vw,6rem)]">
+    <p class="mb-5 font-mono text-base font-semibold tracking-[0.12em] text-accent uppercase before:content-['//_']">About</p>
+    <h1 class="mb-8 max-w-[980px] font-serif text-[clamp(3.4rem,7vw,7rem)] leading-[0.98] font-normal tracking-[-0.035em]">Wide perspective. Careful execution.</h1>
+  </header>
+  <section class="grid grid-cols-[minmax(240px,0.8fr)_2fr] items-start gap-[clamp(2.5rem,7vw,8rem)] border-b border-rule py-[clamp(5rem,10vw,10rem)] max-mobile:grid-cols-1">
+    <img class="aspect-[1/1.08] w-full border-b-8 border-accent object-cover grayscale" src={portrait.src} width={portrait.width} height={portrait.height} alt="Brijesh Bhakta" />
+    <div class="max-w-[770px] [&>p:first-of-type]:font-serif [&>p:first-of-type]:text-[clamp(1.8rem,3.5vw,3.2rem)] [&>p:first-of-type]:leading-[1.2]">
+      <p>I’m Brijesh, a software engineer who has spent the last decade working across the layers that make a product useful.</p>
+      <p>My background includes backend services, data-heavy web applications, identity systems, payments, and mobile-connected products. That range helps me trace a problem from the interface through the API and into the underlying system—without losing sight of the person using it.</p>
+      <p>I graduated in Computer Engineering from Uka Tarsadia University in 2016 and began my professional career working across .NET, Node.js, and full-stack product development. I’ve kept the same curiosity since: learn the system, make the trade-offs explicit, and leave the code easier to understand.</p>
+    </div>
+  </section>
+  <section class="border-b border-rule py-[clamp(5rem,10vw,10rem)]">
+    <p class="mb-5 font-mono text-base font-semibold tracking-[0.12em] text-accent uppercase before:content-['//_']">Working approach</p>
+    <div class="grid grid-cols-3 gap-12 max-mobile:grid-cols-1 [&_h3]:font-serif [&_h3]:text-[1.7rem] [&_h3]:font-normal [&_p]:text-secondary">
+      <article><h3>Understand the whole</h3><p>Good technical choices start with the user, the constraints, and the surrounding system—not a preferred tool.</p></article>
+      <article><h3>Make complexity legible</h3><p>Clear boundaries, direct communication, and maintainable code make products easier to operate and evolve.</p></article>
+      <article><h3>Keep learning practical</h3><p>New technology matters when it improves reliability, speed, or the experience—not because it is new.</p></article>
+    </div>
+  </section>
+</BaseLayout>

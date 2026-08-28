@@ -1,42 +1,34 @@
 {
   "name": "brijeshbhakta30.github.io",
-  "version": "1.0.0",
-  "description": "Brijesh Bhakta website",
-  "main": "gulpfile.babel.js",
+  "version": "2.0.0",
+  "packageManager": "pnpm@11.3.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "private": true,
+  "type": "module",
+  "description": "Brijesh Bhakta's portfolio and writing, built with Astro.",
   "scripts": {
-    "start": "gulp",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "ASTRO_TELEMETRY_DISABLED=1 astro dev --host 0.0.0.0",
+    "start": "ASTRO_TELEMETRY_DISABLED=1 astro dev",
+    "build": "ASTRO_TELEMETRY_DISABLED=1 astro check && ASTRO_TELEMETRY_DISABLED=1 astro build",
+    "check": "ASTRO_TELEMETRY_DISABLED=1 astro check",
+    "preview": "ASTRO_TELEMETRY_DISABLED=1 astro preview"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/brijeshbhakta30/brijeshbhakta30.github.io.git"
   },
-  "author": "@brijeshbhakta30",
-  "license": "",
-  "bugs": {
-    "url": "https://github.com/brijeshbhakta30/brijeshbhakta30.github.io/issues"
-  },
+  "author": "Brijesh Bhakta",
   "homepage": "https://brijeshbhakta.com",
-  "devDependencies": {
-    "babel-core": "^6.22.1",
-    "babel-preset-es2015": "^6.22.0",
-    "browser-sync": "^2.18.6",
-    "del": "^2.2.2",
-    "fs": "0.0.2",
-    "gulp": "^3.9.1",
-    "gulp-add-src": "^0.2.0",
-    "gulp-autoprefixer": "^3.1.1",
-    "gulp-babel": "^6.1.2",
-    "gulp-concat": "^2.6.0",
-    "gulp-header": "^1.8.8",
-    "gulp-if": "^2.0.2",
-    "gulp-plumber": "^1.1.0",
-    "gulp-rename": "^1.2.2",
-    "gulp-uglify": "^2.0.1",
-    "gulp-util": "^3.0.8",
-    "hygienist-middleware": "^0.1.3"
-  },
   "dependencies": {
-    "linkjuice": "^1.0.1"
+    "@astrojs/check": "^0.9.4",
+    "@astrojs/sitemap": "^3.6.0",
+    "@tailwindcss/vite": "^4.1.12",
+    "astro": "^5.13.5",
+    "peerjs": "^1.5.5",
+    "sharp": "^0.34.3",
+    "tailwindcss": "^4.1.12",
+    "typescript": "^5.9.2"
   }
 }

@@ -1,0 +1,93 @@
+---
+import SiteHeader from '../components/SiteHeader.astro';
+import SiteFooter from '../components/SiteFooter.astro';
+import { ClientRouter } from 'astro:transitions';
+import '../styles/global.css';
+import portrait from '../assets/brijesh.jpg';
+
+interface Props {
+  title: string;
+  description: string;
+  image?: string;
+  article?: boolean;
+}
+
+const { title, description, image = portrait.src, article = false } = Astro.props;
+const canonical = new URL(Astro.url.pathname, Astro.site);
+const pageTitle = title === 'Brijesh Bhakta' ? title : `${title} — Brijesh Bhakta`;
+const socialImage = new URL(image, Astro.site);
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="generator" content={Astro.generator} />
+    <meta name="theme-color" content="#F3F0E8" />
+    <ClientRouter />
+    <script is:inline>
+      (() => {
+        let theme = 'light';
+        try {
+          const saved = localStorage.getItem('theme');
+          theme = saved === 'light' || saved === 'dark'
+            ? saved
+            : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        } catch {
+          theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+        document.documentElement.dataset.theme = theme;
+      })();
+    </script>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <meta property="og:type" content={article ? 'article' : 'website'} />
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={socialImage} />
+    <meta property="og:site_name" content="Brijesh Bhakta" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:creator" content="@brijeshbhakta30" />
+    <meta name="twitter:title" content={pageTitle} />
+    <meta name="twitter:description" content={description} />
+    <title>{pageTitle}</title>
+  </head>
+  <body>
+    <a class="fixed -top-24 left-4 z-20 bg-foreground px-4 py-3 text-background focus:top-4" href="#main-content">Skip to content</a>
+    <div class="mx-auto w-[min(1380px,calc(100%-48px))] max-mobile:w-[min(100%-28px,1380px)]">
+      <SiteHeader />
+      <main id="main-content" class="[view-transition-name:page-content]"><slot /></main>
+      <SiteFooter />
+    </div>
+    <script>
+      const savedTheme = () => {
+        try {
+          const theme = localStorage.getItem('theme');
+          return theme === 'light' || theme === 'dark' ? theme : undefined;
+        } catch {
+          return undefined;
+        }
+      };
+
+      document.addEventListener('astro:before-preparation', () => {
+        document.documentElement.dataset.navigating = 'true';
+      });
+
+      document.addEventListener('astro:before-swap', (event) => {
+        const theme = savedTheme();
+        if (theme) {
+          (event as Event & { newDocument: Document }).newDocument.documentElement.dataset.theme = theme;
+        }
+      });
+
+      document.addEventListener('astro:page-load', () => {
+        const theme = savedTheme();
+        if (theme) document.documentElement.dataset.theme = theme;
+        delete document.documentElement.dataset.navigating;
+      });
+    </script>
+  </body>
+</html>

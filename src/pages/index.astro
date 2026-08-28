@@ -1,0 +1,87 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import SectionTitle from '../components/SectionTitle.astro';
+
+const posts = (await getCollection('writing', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.publishedAt.valueOf() - a.data.publishedAt.valueOf());
+const formatDate = (date: Date) => new Intl.DateTimeFormat('en', { month: 'short', year: 'numeric' }).format(date);
+---
+
+<BaseLayout title="Brijesh Bhakta" description="Software engineer with 10 years of experience building dependable backend systems, web products, and mobile services.">
+  <section class="grid min-h-[max(620px,calc(91vh-96px))] content-between border-b border-rule pt-[clamp(3.5rem,7vw,7rem)] pb-8 max-mobile:min-h-auto max-mobile:pb-12" aria-labelledby="hero-title">
+    <div>
+      <p class="mb-5 font-mono text-base font-semibold tracking-[0.12em] text-accent uppercase before:content-['//_']">Software engineer · 10 years in practice</p>
+      <h1 class="mb-8 max-w-[1100px] font-serif text-[clamp(3.6rem,8.5vw,8.7rem)] leading-[0.98] font-normal tracking-[-0.035em] [&_em]:text-accent" id="hero-title">One engineer.<br />Every layer of the <em>product.</em></h1>
+    </div>
+    <div class="grid grid-cols-[1fr_2fr_1fr] items-end gap-8 max-mobile:grid-cols-1">
+      <p class="font-mono text-[0.8rem] tracking-[0.08em] text-muted uppercase max-mobile:hidden">Experience <span class="mt-[0.4rem] block text-base text-foreground">10 years / 2016—now</span></p>
+      <p class="m-0 max-w-[670px] text-[clamp(1.15rem,2vw,1.45rem)] leading-normal text-secondary">I build dependable software across backend systems, web interfaces, and mobile services—bringing the whole product into view, not just one slice of the stack.</p>
+      <a class="justify-self-end font-mono text-[0.8rem] uppercase max-mobile:hidden" href="#selected-work">Selected work ↓</a>
+    </div>
+  </section>
+
+  <section class="border-b border-rule py-[clamp(5rem,10vw,10rem)]" aria-label="Capabilities">
+    <SectionTitle eyebrow="Range" title="Across the stack, with depth." />
+    <div class="grid grid-cols-3 border-t border-rule max-mobile:grid-cols-1">
+      <article class="min-h-[310px] border-r border-rule p-8 last:border-r-0 max-mobile:min-h-auto max-mobile:border-r-0 max-mobile:border-b max-mobile:px-0">
+        <span class="font-mono text-base text-accent">01 / Backend</span>
+        <h3 class="mt-20 mb-4 font-serif text-[2rem] font-normal leading-[1.2] max-mobile:mt-10">Systems that hold up</h3>
+        <p class="text-secondary">APIs, authentication, data workflows, payments, and asynchronous services designed for clarity and reliability.</p>
+      </article>
+      <article class="min-h-[310px] border-r border-rule p-8 last:border-r-0 max-mobile:min-h-auto max-mobile:border-r-0 max-mobile:border-b max-mobile:px-0">
+        <span class="font-mono text-base text-accent">02 / Web</span>
+        <h3 class="mt-20 mb-4 font-serif text-[2rem] font-normal leading-[1.2] max-mobile:mt-10">Interfaces with intent</h3>
+        <p class="text-secondary">Product-focused web applications that turn complex workflows into useful, understandable experiences.</p>
+      </article>
+      <article class="min-h-[310px] border-r border-rule p-8 last:border-r-0 max-mobile:min-h-auto max-mobile:border-r-0 max-mobile:border-b max-mobile:px-0">
+        <span class="font-mono text-base text-accent">03 / Mobile</span>
+        <h3 class="mt-20 mb-4 font-serif text-[2rem] font-normal leading-[1.2] max-mobile:mt-10">Services in the real world</h3>
+        <p class="text-secondary">Mobile-backed products for on-demand services, payments, notifications, and connected camera workflows.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="border-b border-rule py-[clamp(5rem,10vw,10rem)]" id="selected-work" aria-label="Selected work">
+    <SectionTitle eyebrow="Selected earlier work" title="Products, not just code." link="/work" linkLabel="See the work archive" />
+    <div class="border-t border-rule">
+      <article class="grid grid-cols-[1fr_2fr_2fr] gap-8 border-b border-rule py-8 max-mobile:grid-cols-1 max-mobile:gap-3">
+        <p class="m-0 font-mono text-sm tracking-[0.06em] uppercase">Backend systems<br />Node.js · SQL Server</p>
+        <h3 class="m-0 font-serif text-[clamp(1.6rem,3vw,2.7rem)] font-normal leading-[1.2]">Server health administration</h3>
+        <p class="m-0 text-secondary">An administration system that ran asynchronous health checks across more than one hundred documented SQL Server instances and surfaced their status on open dashboards.</p>
+      </article>
+      <article class="grid grid-cols-[1fr_2fr_2fr] gap-8 border-b border-rule py-8 max-mobile:grid-cols-1 max-mobile:gap-3">
+        <p class="m-0 font-mono text-sm tracking-[0.06em] uppercase">Web product<br />React · Node.js</p>
+        <h3 class="m-0 font-serif text-[clamp(1.6rem,3vw,2.7rem)] font-normal leading-[1.2]">Investment portfolio management</h3>
+        <p class="m-0 text-secondary">Billing dashboards, detailed portfolio views, and invoice estimates for a wider wealth-management platform.</p>
+      </article>
+      <article class="grid grid-cols-[1fr_2fr_2fr] gap-8 border-b border-rule py-8 max-mobile:grid-cols-1 max-mobile:gap-3">
+        <p class="m-0 font-mono text-sm tracking-[0.06em] uppercase">Mobile services<br />Node.js · Payments</p>
+        <h3 class="m-0 font-serif text-[clamp(1.6rem,3vw,2.7rem)] font-normal leading-[1.2]">On-demand service platforms</h3>
+        <p class="m-0 text-secondary">Backend services for mobile products connecting customers and providers through location-aware requests, notifications, and Stripe Connect payments.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="border-b border-rule py-[clamp(5rem,10vw,10rem)]" aria-label="Recent writing">
+    <SectionTitle eyebrow="From the archive" title="Writing & notes." link="/writing" linkLabel="View all writing" />
+    <div>
+      {posts.slice(0, 3).map((post) => (
+        <a class="grid grid-cols-[1fr_3fr_1.5fr] items-baseline gap-8 border-t border-rule py-8 no-underline max-mobile:grid-cols-[1fr_auto] max-mobile:gap-x-4 max-mobile:gap-y-2" href={post.data.permalink}>
+          <time class="font-mono text-base tracking-[0.06em] uppercase" datetime={post.data.publishedAt.toISOString()}>{formatDate(post.data.publishedAt)}</time>
+          <h3 class="m-0 font-serif text-[clamp(1.7rem,3vw,2.8rem)] font-normal leading-[1.2] max-mobile:col-span-full">{post.data.title}</h3>
+          <span class="font-mono text-base tracking-[0.06em] uppercase max-mobile:col-start-2 max-mobile:row-start-1">{post.data.category} ↗</span>
+        </a>
+      ))}
+    </div>
+  </section>
+
+  <section class="grid grid-cols-[1fr_2fr] gap-8 border-b border-rule py-[clamp(5rem,10vw,10rem)] max-mobile:grid-cols-1" aria-labelledby="contact-title">
+    <p class="mb-5 font-mono text-base font-semibold tracking-[0.12em] text-accent uppercase before:content-['//_']">Start a conversation</p>
+    <div class="max-w-[760px]">
+      <h2 class="mb-8 font-serif text-[clamp(2.4rem,5vw,5rem)] leading-[0.98] font-normal tracking-[-0.035em]" id="contact-title">Good software starts with a clear problem.</h2>
+      <p class="max-w-[720px] text-[clamp(1.2rem,2vw,1.55rem)] leading-normal text-secondary">If you’re working through a difficult product or engineering challenge, I’d be glad to hear about it.</p>
+      <a class="font-mono text-[0.8rem] font-semibold tracking-[0.06em] text-accent uppercase" href="mailto:brijeshbhakta30@gmail.com">brijeshbhakta30@gmail.com ↗</a>
+    </div>
+  </section>
+</BaseLayout>
