@@ -235,15 +235,28 @@ const initialiseScrumPoker = () => {
     .filter((vote): vote is string => vote !== null && Number.isFinite(Number(vote)))
     .map(Number);
 
+  const compareVoteValues = (first: string, second: string) => {
+    const firstNumber = Number(first);
+    const secondNumber = Number(second);
+    const firstIsNumeric = Number.isFinite(firstNumber);
+    const secondIsNumeric = Number.isFinite(secondNumber);
+    if (firstIsNumeric && secondIsNumeric && firstNumber !== secondNumber) return firstNumber - secondNumber;
+    if (firstIsNumeric !== secondIsNumeric) return firstIsNumeric ? -1 : 1;
+
+    const firstSpecialIndex = CARD_ORDER.indexOf(first);
+    const secondSpecialIndex = CARD_ORDER.indexOf(second);
+    const firstOrder = firstSpecialIndex === -1 ? Number.MAX_SAFE_INTEGER : firstSpecialIndex;
+    const secondOrder = secondSpecialIndex === -1 ? Number.MAX_SAFE_INTEGER : secondSpecialIndex;
+    if (firstOrder !== secondOrder) return firstOrder - secondOrder;
+    return first.localeCompare(second, undefined, { sensitivity: 'base' });
+  };
+
   const renderStatistics = (animateReveal: boolean) => {
     statistics.classList.toggle('hidden', !state.revealed);
     statistics.classList.toggle('is-entering', animateReveal);
     if (!state.revealed) return;
 
     const numbers = numericVotes();
-    find<HTMLElement>('#stat-average').textContent = numbers.length
-      ? (numbers.reduce((total, value) => total + value, 0) / numbers.length).toFixed(1).replace('.0', '')
-      : '—';
     find<HTMLElement>('#stat-low').textContent = numbers.length ? String(Math.min(...numbers)) : '—';
     find<HTMLElement>('#stat-high').textContent = numbers.length ? String(Math.max(...numbers)) : '—';
 
@@ -257,12 +270,15 @@ const initialiseScrumPoker = () => {
 
     const counts = new Map<string, number>();
     for (const vote of votes) counts.set(vote, (counts.get(vote) ?? 0) + 1);
-    find<HTMLElement>('#distribution').innerHTML = CARD_ORDER
-      .filter((card) => counts.has(card))
+    const orderedVotes = [...counts.keys()].sort(compareVoteValues);
+    const highestCount = counts.size ? Math.max(...counts.values()) : 0;
+    const mostVoted = orderedVotes.filter((vote) => counts.get(vote) === highestCount);
+    find<HTMLElement>('#stat-most-voted').textContent = mostVoted.length ? mostVoted.join(' / ') : '—';
+    find<HTMLElement>('#distribution').innerHTML = orderedVotes
       .map((card) => {
         const count = counts.get(card)!;
         const width = votes.length ? (count / votes.length) * 100 : 0;
-        return `<div class="grid grid-cols-[24px_1fr_20px] items-center gap-2 text-sm"><span class="font-mono">${card}</span><span class="h-1 bg-rule"><span class="block h-full bg-accent" style="width:${width}%"></span></span><span class="text-right text-muted">${count}</span></div>`;
+        return `<div class="grid grid-cols-[24px_1fr_20px] items-center gap-2 text-sm"><span class="truncate font-mono" title="${escapeHtml(card)}">${escapeHtml(card)}</span><span class="h-1 bg-rule"><span class="block h-full bg-accent" style="width:${width}%"></span></span><span class="text-right text-muted">${count}</span></div>`;
       })
       .join('');
   };
@@ -271,22 +287,8 @@ const initialiseScrumPoker = () => {
     if (first.vote === null) return second.vote === null ? first.name.localeCompare(second.name) : 1;
     if (second.vote === null) return -1;
 
-    const firstNumber = Number(first.vote);
-    const secondNumber = Number(second.vote);
-    const firstIsNumeric = Number.isFinite(firstNumber);
-    const secondIsNumeric = Number.isFinite(secondNumber);
-    if (firstIsNumeric && secondIsNumeric && firstNumber !== secondNumber) return firstNumber - secondNumber;
-    if (firstIsNumeric !== secondIsNumeric) return firstIsNumeric ? -1 : 1;
-
-    if (!firstIsNumeric && !secondIsNumeric) {
-      const firstSpecialIndex = CARD_ORDER.indexOf(first.vote);
-      const secondSpecialIndex = CARD_ORDER.indexOf(second.vote);
-      const firstOrder = firstSpecialIndex === -1 ? Number.MAX_SAFE_INTEGER : firstSpecialIndex;
-      const secondOrder = secondSpecialIndex === -1 ? Number.MAX_SAFE_INTEGER : secondSpecialIndex;
-      if (firstOrder !== secondOrder) return firstOrder - secondOrder;
-      const voteOrder = first.vote.localeCompare(second.vote);
-      if (voteOrder !== 0) return voteOrder;
-    }
+    const voteOrder = compareVoteValues(first.vote, second.vote);
+    if (voteOrder !== 0) return voteOrder;
 
     const nameOrder = first.name.localeCompare(second.name, undefined, { sensitivity: 'base' });
     return nameOrder || first.id.localeCompare(second.id);
@@ -331,14 +333,18 @@ const initialiseScrumPoker = () => {
     stopTimerButton.classList.toggle('hidden', state.timerEndsAt === null);
     revealButton.disabled = state.revealed || voted === 0;
     revealButton.textContent = state.revealed ? 'Votes revealed' : 'Reveal votes';
+    playersGrid.classList.toggle('is-revealed', state.revealed);
 
     playersGrid.innerHTML = displayedPlayers.map((player, index) => {
       const angle = `${(index / Math.max(total, 1)) * Math.PI * 2 - Math.PI / 2}rad`;
+      const throwAngle = (index / Math.max(displayedPlayers.length, 1)) * Math.PI * 2 - Math.PI / 2;
+      const throwX = `${Math.cos(throwAngle) * 210}px`;
+      const throwY = `${Math.sin(throwAngle) * 150}px`;
       const votedClass = player.vote !== null ? 'is-voted' : '';
       const revealClass = state.revealed && player.vote !== null ? 'is-revealed' : '';
       const cardValue = state.revealed && player.vote !== null ? player.vote : '•';
       const revealAnimationClass = animateReveal && player.vote !== null ? 'is-reveal-entering' : '';
-      return `<article class="scrum-player" style="--angle:${angle}"><div class="scrum-player-card ${votedClass} ${revealClass} ${revealAnimationClass}">${cardValue}</div><strong class="scrum-player-name">${escapeHtml(player.name)}${player.id === localPlayerId ? ' (you)' : ''}</strong><span class="scrum-player-role">${player.isHost ? 'Facilitator' : player.vote !== null ? 'Ready' : 'Thinking'}</span></article>`;
+      return `<article class="scrum-player" style="--angle:${angle};--throw-x:${throwX};--throw-y:${throwY}"><div class="scrum-player-card ${votedClass} ${revealClass} ${revealAnimationClass}">${cardValue}</div><strong class="scrum-player-name">${escapeHtml(player.name)}${player.id === localPlayerId ? ' (you)' : ''}</strong><span class="scrum-player-role">${player.isHost ? 'Facilitator' : player.vote !== null ? 'Ready' : 'Thinking'}</span></article>`;
     }).join('');
 
     participantList.innerHTML = state.players.map((player) => `<li class="flex items-center justify-between gap-3"><span class="min-w-0 truncate">${escapeHtml(player.name)}${player.id === localPlayerId ? ' (you)' : ''}</span>${canFacilitate && !player.isHost ? `<button class="shrink-0 cursor-pointer border border-rule px-2 py-1 font-mono text-[0.6rem] tracking-[0.04em] uppercase hover:border-accent hover:text-accent" type="button" data-promote-player="${escapeHtml(player.id)}">Make facilitator</button>` : `<span class="shrink-0 font-mono text-[0.65rem] tracking-[0.04em] text-muted uppercase">${player.isHost ? 'Facilitator' : player.vote !== null ? 'Voted' : 'Choosing'}</span>`}</li>`).join('');

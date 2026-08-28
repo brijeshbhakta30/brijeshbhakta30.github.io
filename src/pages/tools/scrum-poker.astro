@@ -103,14 +103,19 @@ const cards = ['0', '1', '2', '3', '5', '8', '13', '21', '?', '☕'];
                   <p id="timer-display" class="scrum-timer mt-4 mb-0 font-mono text-lg tracking-[0.08em] text-muted" aria-live="polite">2:00</p>
                 </div>
                 <div id="statistics" class="scrum-results hidden" aria-live="polite">
-                  <p class="mb-3 font-mono text-[0.7rem] tracking-[0.08em] text-accent uppercase">Round result</p>
-                  <div class="grid grid-cols-3 gap-2 text-center">
-                    <div class="scrum-result-stat"><strong id="stat-average" class="block font-serif text-2xl font-normal">—</strong><span class="font-mono text-[0.6rem] text-muted uppercase">Average</span></div>
-                    <div class="scrum-result-stat"><strong id="stat-low" class="block font-serif text-2xl font-normal">—</strong><span class="font-mono text-[0.6rem] text-muted uppercase">Low</span></div>
-                    <div class="scrum-result-stat"><strong id="stat-high" class="block font-serif text-2xl font-normal">—</strong><span class="font-mono text-[0.6rem] text-muted uppercase">High</span></div>
-                  </div>
-                  <p id="consensus-label" class="mt-3 mb-0 text-sm text-secondary"></p>
-                  <div id="distribution" class="mt-4 space-y-2 text-left"></div>
+                  <section class="scrum-result-summary">
+                    <p class="mb-3 font-mono text-[0.7rem] tracking-[0.08em] text-accent uppercase">Round result</p>
+                    <div class="scrum-result-stats">
+                      <div class="scrum-result-stat"><strong id="stat-most-voted" class="block font-serif text-2xl font-normal">—</strong><span class="font-mono text-[0.6rem] text-muted uppercase">Most voted</span></div>
+                      <div class="scrum-result-stat"><strong id="stat-low" class="block font-serif text-2xl font-normal">—</strong><span class="font-mono text-[0.6rem] text-muted uppercase">Low</span></div>
+                      <div class="scrum-result-stat"><strong id="stat-high" class="block font-serif text-2xl font-normal">—</strong><span class="font-mono text-[0.6rem] text-muted uppercase">High</span></div>
+                    </div>
+                    <p id="consensus-label" class="mt-3 mb-0 text-sm text-secondary"></p>
+                  </section>
+                  <section class="scrum-distribution-panel" aria-label="Vote distribution">
+                    <p class="mb-3 font-mono text-[0.65rem] tracking-[0.08em] text-muted uppercase">Vote spread</p>
+                    <div id="distribution" class="space-y-2 text-left"></div>
+                  </section>
                 </div>
               </div>
               <div id="players-grid" class="scrum-players" aria-live="polite"></div>
@@ -187,7 +192,7 @@ const cards = ['0', '1', '2', '3', '5', '8', '13', '21', '?', '☕'];
 <style is:global>
   .scrum-table {
     position: relative;
-    min-height: 430px;
+    min-height: 500px;
     overflow: hidden;
     border: 1px solid var(--site-rule);
     border-radius: 48% / 26%;
@@ -215,7 +220,9 @@ const cards = ['0', '1', '2', '3', '5', '8', '13', '21', '?', '☕'];
   }
 
   .scrum-table-copy:has(.scrum-results:not(.hidden)) {
-    width: min(410px, 58%);
+    inset: 2.75rem 2.25rem;
+    width: auto;
+    transform: none;
   }
 
   .scrum-table-copy:has(.scrum-results:not(.hidden)) .scrum-round-overview {
@@ -223,7 +230,33 @@ const cards = ['0', '1', '2', '3', '5', '8', '13', '21', '?', '☕'];
   }
 
   .scrum-results {
+    display: grid;
+    height: 100%;
+    grid-template-columns: minmax(118px, 22%) minmax(210px, 1fr) minmax(140px, 25%);
+    align-items: center;
+    gap: 1rem;
     transform-origin: center;
+  }
+
+  .scrum-results.hidden {
+    display: none;
+  }
+
+  .scrum-result-summary {
+    grid-column: 1;
+  }
+
+  .scrum-result-stats {
+    display: grid;
+    gap: 0.5rem;
+  }
+
+  .scrum-distribution-panel {
+    grid-column: 3;
+    min-width: 0;
+    padding: 1rem;
+    border-left: 1px solid var(--site-rule);
+    background: color-mix(in srgb, var(--site-background) 54%, transparent);
   }
 
   .scrum-results.is-entering {
@@ -260,6 +293,16 @@ const cards = ['0', '1', '2', '3', '5', '8', '13', '21', '?', '☕'];
     pointer-events: none;
   }
 
+  .scrum-players.is-revealed {
+    inset: 3.5rem 27% 3.5rem 24%;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(62px, 82px));
+    place-content: center;
+    align-items: start;
+    gap: 1rem 0.55rem;
+  }
+
   .scrum-player {
     position: absolute;
     top: calc(50% + sin(var(--angle)) * 43%);
@@ -267,6 +310,17 @@ const cards = ['0', '1', '2', '3', '5', '8', '13', '21', '?', '☕'];
     width: 82px;
     text-align: center;
     transform: translate(-50%, -50%);
+  }
+
+  .scrum-players.is-revealed .scrum-player {
+    position: static;
+    width: auto;
+    min-width: 0;
+    transform: none;
+  }
+
+  .scrum-players.is-revealed .scrum-player-role {
+    display: none;
   }
 
   .scrum-player-card {
@@ -301,7 +355,7 @@ const cards = ['0', '1', '2', '3', '5', '8', '13', '21', '?', '☕'];
   }
 
   .scrum-player-card.is-reveal-entering {
-    animation: scrum-card-reveal 320ms ease-out both;
+    animation: scrum-card-reveal 380ms cubic-bezier(0.2, 0.72, 0.25, 1) both;
     backface-visibility: hidden;
   }
 
@@ -381,12 +435,12 @@ const cards = ['0', '1', '2', '3', '5', '8', '13', '21', '?', '☕'];
 
   @keyframes scrum-card-reveal {
     0% {
-      opacity: 0.45;
-      transform: translateY(-4px) rotateY(75deg) rotate(0deg);
+      opacity: 0.25;
+      transform: translate(var(--throw-x), var(--throw-y)) rotateY(72deg) rotate(-8deg) scale(0.88);
     }
     100% {
       opacity: 1;
-      transform: translateY(-4px) rotateY(0deg) rotate(2deg);
+      transform: translate(0, -4px) rotateY(0deg) rotate(2deg) scale(1);
     }
   }
 
@@ -403,7 +457,7 @@ const cards = ['0', '1', '2', '3', '5', '8', '13', '21', '?', '☕'];
 
   @media (max-width: 47.5rem) {
     .scrum-table {
-      min-height: 470px;
+      min-height: 640px;
       border-radius: 32px;
     }
 
@@ -422,16 +476,54 @@ const cards = ['0', '1', '2', '3', '5', '8', '13', '21', '?', '☕'];
     }
 
     .scrum-table-copy:has(.scrum-results:not(.hidden)) {
-      width: 58%;
+      inset: 1.75rem;
+      width: auto;
+    }
+
+    .scrum-results {
+      grid-template: auto minmax(220px, 1fr) auto / minmax(0, 1fr);
+      gap: 0.75rem;
+    }
+
+    .scrum-result-summary {
+      grid-row: 1;
+      grid-column: 1;
+    }
+
+    .scrum-result-summary > p:first-child {
+      margin-bottom: 0.5rem;
+    }
+
+    .scrum-result-stats {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .scrum-result-summary #consensus-label {
+      margin-top: 0.5rem;
+    }
+
+    .scrum-distribution-panel {
+      grid-row: 3;
+      grid-column: 1;
+      padding: 0.75rem 1rem;
+      border-top: 1px solid var(--site-rule);
+      border-left: 0;
+    }
+
+    .scrum-distribution-panel > p {
+      margin-bottom: 0.5rem;
+    }
+
+    .scrum-players.is-revealed {
+      inset: 175px 1.75rem 135px;
+      grid-template-columns: repeat(auto-fit, minmax(58px, 72px));
+      gap: 0.8rem 0.35rem;
     }
 
     .scrum-result-stat {
       padding: 0.45rem 0.2rem;
     }
 
-    .scrum-results #distribution {
-      display: none;
-    }
   }
 
   @media (prefers-reduced-motion: reduce) {
