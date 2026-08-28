@@ -1,0 +1,42 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import SectionTitle from '../components/SectionTitle.astro';
+
+const posts = (await getCollection('writing', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.publishedAt.valueOf() - a.data.publishedAt.valueOf());
+const formatDate = (date: Date) => new Intl.DateTimeFormat('en', { day: '2-digit', month: 'short', year: 'numeric' }).format(date);
+const topics = [...new Set(posts.flatMap((post) => post.data.tags))].sort();
+---
+
+<BaseLayout title="Writing" description="Practical articles about JavaScript, software engineering, and building products across the stack.">
+  <header class="border-b border-rule pt-[clamp(4.5rem,9vw,9rem)] pb-[clamp(3rem,6vw,6rem)]">
+    <p class="mb-5 font-mono text-base font-semibold tracking-[0.12em] text-accent uppercase before:content-['//_']">Writing</p>
+    <h1 class="mb-8 max-w-[980px] font-serif text-[clamp(3.4rem,7vw,7rem)] leading-[0.98] font-normal tracking-[-0.035em]">Ideas sharpened through practice.</h1>
+    <p class="max-w-[720px] text-[clamp(1.2rem,2vw,1.55rem)] leading-normal text-secondary">Practical notes on languages, product engineering, and the decisions that shape dependable software.</p>
+  </header>
+  <section class="border-b border-rule py-[clamp(5rem,10vw,10rem)]" aria-label="Latest writing">
+    <SectionTitle eyebrow="Latest" title="Recent writing." />
+    <div class="mb-12 flex items-baseline gap-8 max-mobile:flex-col max-mobile:items-start max-mobile:gap-2" aria-label="Topics covered">
+      <p class="m-0 shrink-0 font-mono text-[0.8rem] tracking-[0.06em] text-muted uppercase">Topics covered</p>
+      <ul class="mt-4 flex list-none flex-wrap gap-2 p-0">
+        {topics.map((topic) => <li class="border border-rule px-[0.6rem] py-[0.3rem] font-mono text-[0.8rem] tracking-[0.04em] text-muted uppercase">{topic}</li>)}
+      </ul>
+    </div>
+    <div id="latest-writing" class="border-b border-rule">
+    {posts.map((post) => (
+      <a class="grid grid-cols-[1fr_3fr_1.5fr] items-baseline gap-8 border-t border-rule py-8 no-underline max-mobile:grid-cols-[1fr_auto] max-mobile:gap-x-4 max-mobile:gap-y-2" href={post.data.permalink}>
+        <time class="font-mono text-base tracking-[0.06em] uppercase" datetime={post.data.publishedAt.toISOString()}>{formatDate(post.data.publishedAt)}</time>
+        <div>
+          <h3 class="m-0 font-serif text-[clamp(1.7rem,3vw,2.8rem)] font-normal leading-[1.2]">{post.data.title}</h3>
+          <p class="mt-[0.84rem] mb-0 text-secondary">{post.data.description}</p>
+          <ul class="mt-4 flex list-none flex-wrap gap-2 p-0" aria-label={`Topics for ${post.data.title}`}>
+            {post.data.tags.map((tag) => <li class="border border-rule px-[0.6rem] py-[0.3rem] font-mono text-[0.8rem] tracking-[0.04em] text-muted uppercase">{tag}</li>)}
+          </ul>
+        </div>
+        <span class="justify-self-end font-mono text-base tracking-[0.06em] uppercase max-mobile:col-start-2 max-mobile:row-start-1">{post.data.category} ↗</span>
+      </a>
+    ))}
+    </div>
+  </section>
+</BaseLayout>

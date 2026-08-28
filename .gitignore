@@ -1,8 +1,8 @@
-_site
-node_modules
+node_modules/
+.pnpm-store/
+dist/
+.astro/
 .DS_Store
 .tmp
-.sass-cache
 *.sublime-*
 .idea
-.jekyll-metadata

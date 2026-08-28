@@ -1,42 +1,63 @@
-# Source code for brijeshbhakta.com
+# brijeshbhakta.com
 
-## Build this project
+Brijesh Bhakta's static portfolio and writing site, built with [Astro](https://astro.build/), styled with [Tailwind CSS](https://tailwindcss.com/), and deployed to GitHub Pages.
 
-### Install jekyll
+## Requirements
 
-Ensure `jekyll` is installed:
+- Node.js 24 or newer
+- pnpm 11 or newer
 
-```
-gem install jekyll
-```
+## Local development
 
-If you need XCode dependencies, follow the [Jekyll installation guide](https://jekyllrb.com/docs/installation/). For Windows, follow the [Windows installation guide](https://jekyllrb.com/docs/windows/#installation).
-
-Uncompiled [Jekyll](//jekyllrb.com) source code for [brijeshbhakta.com](//brijeshbhakta.com).
-
-### Installing dependencies
-
-This project makes use of `gulp` and `yarn`. First, you'll need to make sure you have them both installed:
-
-```
-npm install --g gulp
-npm install --g yarn
+```sh
+pnpm install
+pnpm dev
 ```
 
-Next, you'll need to `yarn install` the other dev-dependencies, run this from the `brijeshbhakta30.github.io` root folder:
+Astro serves the site at `http://localhost:4321` by default.
 
-```
-cd brijeshbhakta30.github.io
-yarn install
-```
+## Quality checks
 
-### Running the server
-
-Gulp is setup to make it easier to run all the tasks, to run the project simply run:
-
-```
-yarn start
+```sh
+pnpm check
 ```
 
-This will start serving the project from `localhost:4000`, with livereload functionality.
+This runs Astro's TypeScript and content validation.
 
+## Production build
+
+```sh
+pnpm build
+```
+
+The static site is written to `dist/`. The build also creates the XML sitemap.
+
+## Preview the production build
+
+```sh
+pnpm preview
+```
+
+## Content
+
+Markdown articles live in `src/content/writing/` and are loaded as Astro's typed `writing` content collection. Each post defines its canonical URL, category, and tags in frontmatter. The former `/getting-started-with-es6` address redirects to `/javascript/getting-started-with-es6`.
+
+The original résumé remains at `static/resume.pdf`. The preserved custom domain is stored in both the repository-root `CNAME` and `static/CNAME`; Astro copies the latter to the production build.
+
+## Styling and tools
+
+Tailwind is connected through its Vite plugin. Design tokens, local font faces, document defaults, and Markdown-only article styles live in `src/styles/global.css`; page and component styling uses Tailwind utilities directly in Astro templates.
+
+Future standalone tools can be added under `src/pages/tools/`. Tailwind scans files under `src` automatically, so utilities used by a new tool are included without any extra content configuration.
+
+The first tool is available at `/tools/scrum-poker`. It uses WebRTC data channels through PeerJS: the public PeerJS broker is used for signalling, but room state and votes are exchanged directly between participants and are never stored by this site. The facilitator's browser owns the live room state, so closing that tab ends the current session.
+
+## Deployment
+
+The workflow at `.github/workflows/deploy.yml` builds and deploys the static output on pushes to `master` or `main`, and can also be run manually. In the repository settings, set **Pages → Build and deployment → Source** to **GitHub Actions**.
+
+The site uses the custom domain `brijeshbhakta.com`; keep the existing DNS records and repository Pages domain setting in place.
+
+## Updating professional details
+
+The existing PDF résumé was last updated in 2018 and is presented as an archive. Before publishing a new résumé, replace `static/resume.pdf` and update the archive language on the résumé and work pages. Add a verified LinkedIn URL to the contact page once available.

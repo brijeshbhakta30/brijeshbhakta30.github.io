@@ -1,0 +1,77 @@
+---
+const pathname = Astro.url.pathname;
+const links = [
+  { href: '/work', label: 'Work' },
+  { href: '/writing', label: 'Writing' },
+  { href: '/tools', label: 'Tools' },
+  { href: '/about', label: 'About' },
+  { href: '/resume', label: 'Résumé' },
+  { href: '/contact', label: 'Contact' },
+];
+---
+
+<header class="flex min-h-24 items-center justify-between gap-8 border-b border-rule max-mobile:block max-mobile:py-4">
+  <a class="flex items-center gap-[0.7rem] whitespace-nowrap no-underline max-mobile:mb-4" href="/" aria-label="Brijesh Bhakta, home">
+    <span class="grid aspect-square w-[34px] place-items-center bg-accent font-mono text-[0.8rem] font-semibold text-background" aria-hidden="true">BB</span>
+    <strong class="text-base tracking-[0.02em]">Brijesh Bhakta</strong>
+  </a>
+  <div class="flex min-w-0 items-center gap-[clamp(1rem,2.5vw,2rem)] max-mobile:w-full max-mobile:items-start">
+    <nav class="max-mobile:min-w-0 max-mobile:flex-1" aria-label="Primary navigation">
+      <ul class="m-0 flex list-none flex-wrap gap-[clamp(1rem,2.5vw,2.5rem)] p-0 max-mobile:gap-x-[1.4rem] max-mobile:gap-y-[0.8rem]">
+        {links.map(({ href, label }) => (
+          <li><a class="relative font-mono text-base tracking-[0.08em] no-underline uppercase aria-[current=page]:after:absolute aria-[current=page]:after:right-0 aria-[current=page]:after:-bottom-[0.55rem] aria-[current=page]:after:left-0 aria-[current=page]:after:h-0.5 aria-[current=page]:after:bg-accent" href={href} aria-current={pathname.startsWith(href) ? 'page' : undefined}>{label}</a></li>
+        ))}
+      </ul>
+    </nav>
+    <button class="grid size-9 shrink-0 cursor-pointer place-items-center rounded-full border border-rule bg-transparent p-0 text-foreground hover:border-accent-hover hover:text-accent-hover" type="button" data-theme-toggle aria-label="Switch to dark mode" title="Switch to dark mode">
+      <span class="text-base leading-none dark:hidden" aria-hidden="true">☾</span>
+      <span class="hidden text-base leading-none dark:inline" aria-hidden="true">☀</span>
+    </button>
+  </div>
+</header>
+
+<script>
+  const updateThemeColor = () => {
+    const background = getComputedStyle(document.documentElement)
+      .getPropertyValue('--color-background')
+      .trim();
+    document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
+      ?.setAttribute('content', background);
+  };
+
+  const setupThemeToggle = () => {
+    const toggle = document.querySelector<HTMLButtonElement>('[data-theme-toggle]');
+    if (!toggle || toggle.dataset.ready === 'true') return;
+
+    try {
+      const saved = localStorage.getItem('theme');
+      if (saved === 'light' || saved === 'dark') {
+        document.documentElement.dataset.theme = saved;
+      }
+    } catch {
+      // The inline layout script has already applied the system preference.
+    }
+
+    const updateToggle = (theme: 'light' | 'dark') => {
+      const nextTheme = theme === 'dark' ? 'light' : 'dark';
+      const label = `Switch to ${nextTheme} mode`;
+      toggle.setAttribute('aria-label', label);
+      toggle.setAttribute('title', label);
+    };
+
+    toggle.dataset.ready = 'true';
+    updateToggle(document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
+    updateThemeColor();
+
+    toggle.addEventListener('click', () => {
+      const theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+      document.documentElement.dataset.theme = theme;
+      localStorage.setItem('theme', theme);
+      updateToggle(theme);
+      updateThemeColor();
+    });
+  };
+
+  setupThemeToggle();
+  document.addEventListener('astro:page-load', setupThemeToggle);
+</script>

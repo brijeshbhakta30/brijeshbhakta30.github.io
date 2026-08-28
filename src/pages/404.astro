@@ -1,0 +1,12 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Page not found" description="The requested page could not be found.">
+  <section class="border-b border-rule pt-[clamp(4.5rem,9vw,9rem)] pb-[clamp(3rem,6vw,6rem)]">
+    <p class="mb-5 font-mono text-base font-semibold tracking-[0.12em] text-accent uppercase before:content-['//_']">404 / Not found</p>
+    <h1 class="mb-8 max-w-[980px] font-serif text-[clamp(3.4rem,7vw,7rem)] leading-[0.98] font-normal tracking-[-0.035em]">This route ends here.</h1>
+    <p class="max-w-[720px] text-[clamp(1.2rem,2vw,1.55rem)] leading-normal text-secondary">The page may have moved, or the address may be incomplete. Head back to the portfolio or browse the writing archive.</p>
+    <p><a class="font-mono text-[0.8rem] font-semibold tracking-[0.06em] text-accent uppercase" href="/">Return home ←</a></p>
+  </section>
+</BaseLayout>
