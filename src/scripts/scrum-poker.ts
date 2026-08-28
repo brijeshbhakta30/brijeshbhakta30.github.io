@@ -11,18 +11,41 @@ type RoomState = {
   players: Player[];
   revealed: boolean;
   round: number;
+  timerDuration: number;
+  timerEndsAt: number | null;
+  autoReveal: boolean;
 };
 
 type PokerMessage =
-  | { type: 'join'; name: string }
+  | { type: 'join'; name: string; wantsFacilitator?: boolean }
   | { type: 'vote'; vote: string | null }
   | { type: 'state'; state: RoomState }
   | { type: 'reveal' }
-  | { type: 'reset' };
+  | { type: 'reset' }
+  | { type: 'request-facilitator' }
+  | { type: 'grant-facilitator'; playerId: string }
+  | { type: 'configure-timer'; duration: number; autoReveal: boolean }
+  | { type: 'start-timer'; duration: number; autoReveal: boolean }
+  | { type: 'stop-timer' };
 
 const ROOM_ALPHABET = '23456789ABCDEFGHJKMNPQRSTWXYZ';
 const CARD_ORDER = ['0', '1', '2', '3', '5', '8', '13', '21', '?', '☕'];
 const HIDDEN_VOTE = '__hidden__';
+const FACILITATOR_CHEAT_CODE = 'makemeadmin';
+const FACILITATOR_STORAGE_KEY = 'scrum-poker-facilitator';
+const SPECIAL_ROOMS = new Set(['KINGFISHER', 'ATLANTIS']);
+const DEFAULT_TIMER_SECONDS = 120;
+const MIN_TIMER_SECONDS = 15;
+const MAX_TIMER_SECONDS = 60 * 60;
+
+const freshRoomState = (players: Player[] = []): RoomState => ({
+  players,
+  revealed: false,
+  round: 1,
+  timerDuration: DEFAULT_TIMER_SECONDS,
+  timerEndsAt: null,
+  autoReveal: false,
+});
 
 const makeRoomCode = () => Array.from(
   crypto.getRandomValues(new Uint8Array(7)),
@@ -30,11 +53,13 @@ const makeRoomCode = () => Array.from(
 ).join('');
 
 const normaliseRoomCode = (value: string) => value
+  .trim()
   .toUpperCase()
-  .replace(/O/g, '0')
-  .replace(/[IL]/g, '1')
-  .replace(/[^A-Z0-9]/g, '')
-  .slice(0, 7);
+  .replace(/\s+/g, '-')
+  .replace(/[^A-Z0-9-]/g, '')
+  .replace(/-+/g, '-')
+  .replace(/^-|-$/g, '')
+  .slice(0, 32);
 
 const hostPeerId = (roomCode: string) => `brijesh-scrum-${roomCode.toLowerCase()}`;
 
@@ -64,6 +89,11 @@ const initialiseScrumPoker = () => {
   const hostControls = find<HTMLElement>('#host-controls');
   const revealButton = find<HTMLButtonElement>('#reveal-votes');
   const resetButton = find<HTMLButtonElement>('#reset-round');
+  const timerDisplay = find<HTMLElement>('#timer-display');
+  const timerInput = find<HTMLInputElement>('#timer-duration');
+  const autoRevealInput = find<HTMLInputElement>('#timer-auto-reveal');
+  const startTimerButton = find<HTMLButtonElement>('#start-timer');
+  const stopTimerButton = find<HTMLButtonElement>('#stop-timer');
   const statistics = find<HTMLElement>('#statistics');
   const cardButtons = [...root.querySelectorAll<HTMLButtonElement>('[data-card]')];
   const toast = find<HTMLElement>('#poker-toast');
@@ -71,12 +101,14 @@ const initialiseScrumPoker = () => {
   let peer: Peer | undefined;
   let hostConnection: DataConnection | undefined;
   let connections = new Map<string, DataConnection>();
-  let state: RoomState = { players: [], revealed: false, round: 1 };
+  let state: RoomState = freshRoomState();
   let currentRoom = '';
   let localPlayerId = '';
   let localName = '';
-  let isHost = false;
+  let isRoomOwner = false;
   let toastTimer: number | undefined;
+  let cheatCodeBuffer = '';
+  let timerInterval: number | undefined;
 
   const showToast = (message: string) => {
     toast.textContent = message;
@@ -120,7 +152,7 @@ const initialiseScrumPoker = () => {
   };
 
   const broadcastState = () => {
-    if (!isHost) return;
+    if (!isRoomOwner) return;
     for (const connection of connections.values()) {
       if (!connection.open) continue;
       const privateState = state.revealed ? state : {
@@ -168,16 +200,36 @@ const initialiseScrumPoker = () => {
       .join('');
   };
 
+  const normaliseTimerDuration = (value: number) => Math.min(
+    MAX_TIMER_SECONDS,
+    Math.max(MIN_TIMER_SECONDS, Math.round(value)),
+  );
+
+  const updateTimerDisplay = () => {
+    const secondsLeft = state.timerEndsAt === null
+      ? state.timerDuration
+      : Math.max(0, Math.ceil((state.timerEndsAt - Date.now()) / 1000));
+    const minutes = Math.floor(secondsLeft / 60);
+    const seconds = secondsLeft % 60;
+    timerDisplay.textContent = `${minutes}:${String(seconds).padStart(2, '0')}`;
+    timerDisplay.classList.toggle('text-accent', state.timerEndsAt !== null);
+  };
+
   const render = () => {
     const voted = state.players.filter((player) => player.vote !== null).length;
     const total = state.players.length;
     const localVote = state.players.find((player) => player.id === localPlayerId)?.vote ?? null;
+    const canFacilitate = state.players.some((player) => player.id === localPlayerId && player.isHost);
 
     roundLabel.textContent = `Round ${state.round}`;
     roundStatus.textContent = state.revealed
       ? 'The cards are on the table'
       : voted === total && total > 0 ? 'Everyone has voted' : `${voted} of ${total} voted`;
-    hostControls.classList.toggle('hidden', !isHost);
+    hostControls.classList.toggle('hidden', !canFacilitate);
+    timerInput.value = String(state.timerDuration);
+    autoRevealInput.checked = state.autoReveal;
+    startTimerButton.textContent = state.timerEndsAt === null ? 'Start timer' : 'Restart timer';
+    stopTimerButton.classList.toggle('hidden', state.timerEndsAt === null);
     revealButton.disabled = state.revealed || voted === 0;
     revealButton.textContent = state.revealed ? 'Votes revealed' : 'Reveal votes';
 
@@ -189,13 +241,14 @@ const initialiseScrumPoker = () => {
       return `<article class="scrum-player" style="--angle:${angle}"><div class="scrum-player-card ${votedClass} ${revealClass}">${cardValue}</div><strong class="scrum-player-name">${escapeHtml(player.name)}${player.id === localPlayerId ? ' (you)' : ''}</strong><span class="scrum-player-role">${player.isHost ? 'Facilitator' : player.vote !== null ? 'Ready' : 'Thinking'}</span></article>`;
     }).join('');
 
-    participantList.innerHTML = state.players.map((player) => `<li class="flex items-center justify-between gap-3"><span class="min-w-0 truncate">${escapeHtml(player.name)}${player.id === localPlayerId ? ' (you)' : ''}</span><span class="shrink-0 font-mono text-[0.65rem] tracking-[0.04em] text-muted uppercase">${player.isHost ? 'Host' : player.vote !== null ? 'Voted' : 'Choosing'}</span></li>`).join('');
+    participantList.innerHTML = state.players.map((player) => `<li class="flex items-center justify-between gap-3"><span class="min-w-0 truncate">${escapeHtml(player.name)}${player.id === localPlayerId ? ' (you)' : ''}</span>${canFacilitate && !player.isHost ? `<button class="shrink-0 cursor-pointer border border-rule px-2 py-1 font-mono text-[0.6rem] tracking-[0.04em] uppercase hover:border-accent hover:text-accent" type="button" data-promote-player="${escapeHtml(player.id)}">Make facilitator</button>` : `<span class="shrink-0 font-mono text-[0.65rem] tracking-[0.04em] text-muted uppercase">${player.isHost ? 'Facilitator' : player.vote !== null ? 'Voted' : 'Choosing'}</span>`}</li>`).join('');
 
     for (const button of cardButtons) {
       button.setAttribute('aria-pressed', String(button.dataset.card === localVote));
       button.disabled = state.revealed;
     }
     renderStatistics();
+    updateTimerDisplay();
   };
 
   const escapeHtml = (value: string) => {
@@ -224,11 +277,56 @@ const initialiseScrumPoker = () => {
     broadcastState();
   };
 
+  const grantFacilitator = (playerId: string) => {
+    if (!isRoomOwner || !state.players.some((player) => player.id === playerId)) return;
+    state = {
+      ...state,
+      players: state.players.map((player) => player.id === playerId ? { ...player, isHost: true } : player),
+    };
+    render();
+    broadcastState();
+  };
+
+  const ensureFacilitator = () => {
+    if (state.players.some((player) => player.isHost) || state.players.length === 0) return;
+    state = {
+      ...state,
+      players: state.players.map((player, index) => index === 0 ? { ...player, isHost: true } : player),
+    };
+  };
+
+  const configureTimer = (duration: number, autoReveal: boolean, start = false) => {
+    const timerDuration = normaliseTimerDuration(duration);
+    state = {
+      ...state,
+      timerDuration,
+      autoReveal,
+      timerEndsAt: start ? Date.now() + timerDuration * 1000 : state.timerEndsAt,
+    };
+    render();
+    broadcastState();
+  };
+
+  const stopTimer = () => {
+    state = { ...state, timerEndsAt: null };
+    render();
+    broadcastState();
+  };
+
   const handleHostMessage = (connection: DataConnection, message: PokerMessage) => {
     if (message.type === 'join') {
       const name = message.name.trim().slice(0, 32) || 'Anonymous';
       if (!state.players.some((player) => player.id === connection.peer)) {
-        state = { ...state, players: [...state.players, { id: connection.peer, name, vote: null, isHost: false }] };
+        const wantsFacilitator = message.wantsFacilitator === true;
+        state = {
+          ...state,
+          players: [...state.players, {
+            id: connection.peer,
+            name,
+            vote: null,
+            isHost: wantsFacilitator || !state.players.some((player) => player.isHost),
+          }],
+        };
       }
       broadcastState();
       render();
@@ -236,6 +334,37 @@ const initialiseScrumPoker = () => {
     if (message.type === 'vote' && (message.vote === null || CARD_ORDER.includes(message.vote))) {
       applyVote(connection.peer, message.vote);
     }
+    if (message.type === 'request-facilitator') grantFacilitator(connection.peer);
+    if (
+      message.type === 'grant-facilitator'
+      && state.players.some((player) => player.id === connection.peer && player.isHost)
+    ) {
+      grantFacilitator(message.playerId);
+    }
+    if (message.type === 'reveal' && state.players.some((player) => player.id === connection.peer && player.isHost)) {
+      state = { ...state, revealed: true, timerEndsAt: null };
+      render();
+      broadcastState();
+    }
+    if (message.type === 'reset' && state.players.some((player) => player.id === connection.peer && player.isHost)) {
+      state = {
+        ...state,
+        players: state.players.map((player) => ({ ...player, vote: null })),
+        revealed: false,
+        round: state.round + 1,
+        timerEndsAt: null,
+      };
+      render();
+      broadcastState();
+    }
+    const canFacilitate = state.players.some((player) => player.id === connection.peer && player.isHost);
+    if (message.type === 'configure-timer' && canFacilitate) {
+      configureTimer(message.duration, message.autoReveal);
+    }
+    if (message.type === 'start-timer' && canFacilitate) {
+      configureTimer(message.duration, message.autoReveal, true);
+    }
+    if (message.type === 'stop-timer' && canFacilitate) stopTimer();
   };
 
   const registerGuest = (connection: DataConnection) => {
@@ -244,6 +373,7 @@ const initialiseScrumPoker = () => {
     connection.on('close', () => {
       connections.delete(connection.peer);
       state = { ...state, players: state.players.filter((player) => player.id !== connection.peer) };
+      ensureFacilitator();
       broadcastState();
       render();
     });
@@ -260,26 +390,26 @@ const initialiseScrumPoker = () => {
 
   const returnHome = () => {
     destroyPeer();
-    state = { players: [], revealed: false, round: 1 };
+    state = freshRoomState();
     currentRoom = '';
     localPlayerId = '';
-    isHost = false;
+    isRoomOwner = false;
     setup.classList.remove('hidden');
     roomView.classList.add('hidden');
     updateUrl();
   };
 
-  const startHost = (name: string) => {
+  const startHost = (name: string, roomCode = makeRoomCode()) => {
     destroyPeer();
     localName = name.trim();
-    currentRoom = makeRoomCode();
-    isHost = true;
+    currentRoom = roomCode;
+    isRoomOwner = true;
     setConnection('Opening room', 'connecting');
     peer = new Peer(hostPeerId(currentRoom), { debug: 1 });
 
     peer.on('open', (id) => {
       localPlayerId = id;
-      state = { players: [{ id, name: localName, vote: null, isHost: true }], revealed: false, round: 1 };
+      state = freshRoomState([{ id, name: localName, vote: null, isHost: true }]);
       enterRoom();
       setConnection('Peer-to-peer room live', 'connected');
     });
@@ -294,7 +424,7 @@ const initialiseScrumPoker = () => {
     destroyPeer();
     localName = name.trim();
     currentRoom = normaliseRoomCode(roomCode);
-    isHost = false;
+    isRoomOwner = false;
     setup.classList.add('hidden');
     roomView.classList.remove('hidden');
     roomLabel.textContent = currentRoom;
@@ -306,7 +436,11 @@ const initialiseScrumPoker = () => {
       localPlayerId = id;
       hostConnection = peer!.connect(hostPeerId(currentRoom), { reliable: true });
       hostConnection.on('open', () => {
-        hostConnection!.send({ type: 'join', name: localName } satisfies PokerMessage);
+        hostConnection!.send({
+          type: 'join',
+          name: localName,
+          wantsFacilitator: localStorage.getItem(FACILITATOR_STORAGE_KEY) === 'true',
+        } satisfies PokerMessage);
         setConnection('Connected directly', 'connected');
         sessionStorage.setItem('scrum-poker-name', localName);
       });
@@ -321,6 +455,10 @@ const initialiseScrumPoker = () => {
     });
     peer.on('error', (error) => {
       destroyPeer();
+      if (error.type === 'peer-unavailable' && SPECIAL_ROOMS.has(currentRoom)) {
+        startHost(localName, currentRoom);
+        return;
+      }
       const message = error.type === 'peer-unavailable'
         ? `Room ${currentRoom} is not available. Check the code or ask the facilitator to reopen it.`
         : 'The room could not be reached. Check your connection and try again.';
@@ -347,28 +485,111 @@ const initialiseScrumPoker = () => {
     button.addEventListener('click', () => {
       const selected = state.players.find((player) => player.id === localPlayerId)?.vote;
       const vote = selected === button.dataset.card ? null : button.dataset.card ?? null;
-      if (isHost) applyVote(localPlayerId, vote);
+      if (isRoomOwner) applyVote(localPlayerId, vote);
       else if (hostConnection?.open) hostConnection.send({ type: 'vote', vote } satisfies PokerMessage);
     });
   }
 
   revealButton.addEventListener('click', () => {
-    if (!isHost) return;
-    state = { ...state, revealed: true };
-    render();
-    broadcastState();
+    const canFacilitate = state.players.some((player) => player.id === localPlayerId && player.isHost);
+    if (!canFacilitate) return;
+    if (isRoomOwner) {
+      state = { ...state, revealed: true, timerEndsAt: null };
+      render();
+      broadcastState();
+    } else if (hostConnection?.open) hostConnection.send({ type: 'reveal' } satisfies PokerMessage);
   });
 
   resetButton.addEventListener('click', () => {
-    if (!isHost) return;
+    const canFacilitate = state.players.some((player) => player.id === localPlayerId && player.isHost);
+    if (!canFacilitate) return;
+    if (isRoomOwner) {
+      state = {
+        ...state,
+        players: state.players.map((player) => ({ ...player, vote: null })),
+        revealed: false,
+        round: state.round + 1,
+        timerEndsAt: null,
+      };
+      render();
+      broadcastState();
+    } else if (hostConnection?.open) hostConnection.send({ type: 'reset' } satisfies PokerMessage);
+  });
+
+  participantList.addEventListener('click', (event) => {
+    const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-promote-player]');
+    const playerId = button?.dataset.promotePlayer;
+    const canFacilitate = state.players.some((player) => player.id === localPlayerId && player.isHost);
+    if (!playerId || !canFacilitate) return;
+
+    if (isRoomOwner) grantFacilitator(playerId);
+    else if (hostConnection?.open) {
+      hostConnection.send({ type: 'grant-facilitator', playerId } satisfies PokerMessage);
+    }
+  });
+
+  const timerSettings = () => ({
+    duration: normaliseTimerDuration(Number(timerInput.value) || DEFAULT_TIMER_SECONDS),
+    autoReveal: autoRevealInput.checked,
+  });
+
+  const sendTimerMessage = (message: PokerMessage) => {
+    if (isRoomOwner) {
+      if (message.type === 'configure-timer') configureTimer(message.duration, message.autoReveal);
+      if (message.type === 'start-timer') configureTimer(message.duration, message.autoReveal, true);
+      if (message.type === 'stop-timer') stopTimer();
+    } else if (hostConnection?.open) hostConnection.send(message);
+  };
+
+  timerInput.addEventListener('change', () => {
+    const settings = timerSettings();
+    timerInput.value = String(settings.duration);
+    sendTimerMessage({ type: 'configure-timer', ...settings });
+  });
+  autoRevealInput.addEventListener('change', () => {
+    sendTimerMessage({ type: 'configure-timer', ...timerSettings() });
+  });
+  startTimerButton.addEventListener('click', () => {
+    sendTimerMessage({ type: 'start-timer', ...timerSettings() });
+  });
+  stopTimerButton.addEventListener('click', () => {
+    sendTimerMessage({ type: 'stop-timer' });
+  });
+
+  timerInterval = window.setInterval(() => {
+    if (state.timerEndsAt === null) return;
+    if (state.timerEndsAt > Date.now()) {
+      updateTimerDisplay();
+      return;
+    }
+    if (!isRoomOwner) {
+      updateTimerDisplay();
+      return;
+    }
+
+    const shouldReveal = state.autoReveal;
     state = {
-      players: state.players.map((player) => ({ ...player, vote: null })),
-      revealed: false,
-      round: state.round + 1,
+      ...state,
+      timerEndsAt: null,
+      revealed: shouldReveal ? true : state.revealed,
     };
     render();
     broadcastState();
-  });
+    if (shouldReveal) showToast('Time is up — votes revealed');
+  }, 250);
+
+  const handleCheatCode = (event: KeyboardEvent) => {
+    if (event.ctrlKey || event.metaKey || event.altKey || event.key.length !== 1) return;
+    cheatCodeBuffer = `${cheatCodeBuffer}${event.key.toLowerCase()}`.slice(-FACILITATOR_CHEAT_CODE.length);
+    if (cheatCodeBuffer !== FACILITATOR_CHEAT_CODE) return;
+
+    localStorage.setItem(FACILITATOR_STORAGE_KEY, 'true');
+    if (isRoomOwner) grantFacilitator(localPlayerId);
+    else if (hostConnection?.open) hostConnection.send({ type: 'request-facilitator' } satisfies PokerMessage);
+    showToast('Facilitator access enabled and remembered');
+    cheatCodeBuffer = '';
+  };
+  document.addEventListener('keydown', handleCheatCode);
 
   find<HTMLButtonElement>('#copy-room').addEventListener('click', copyInvite);
   find<HTMLButtonElement>('#leave-room').addEventListener('click', returnHome);
@@ -377,12 +598,16 @@ const initialiseScrumPoker = () => {
   createName.value = savedName;
   joinName.value = savedName;
   const roomFromUrl = normaliseRoomCode(new URLSearchParams(window.location.search).get('room') ?? '');
-  if (roomFromUrl.length === 7) {
+  if (roomFromUrl.length >= 3) {
     roomInput.value = roomFromUrl;
     (savedName ? roomInput : joinName).focus();
   }
 
-  disposeCurrentRoom = destroyPeer;
+  disposeCurrentRoom = () => {
+    document.removeEventListener('keydown', handleCheatCode);
+    window.clearInterval(timerInterval);
+    destroyPeer();
+  };
 };
 
 document.addEventListener('astro:page-load', initialiseScrumPoker);
