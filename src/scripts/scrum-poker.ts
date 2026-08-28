@@ -37,6 +37,31 @@ const SPECIAL_ROOMS = new Set(['KINGFISHER', 'ATLANTIS']);
 const DEFAULT_TIMER_SECONDS = 120;
 const MIN_TIMER_SECONDS = 15;
 const MAX_TIMER_SECONDS = 60 * 60;
+const PEER_OPTIONS = {
+  debug: 0 as const,
+  config: {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun.relay.metered.ca:80' },
+      {
+        urls: [
+          'turn:openrelay.metered.ca:80',
+          'turn:openrelay.metered.ca:443',
+          'turn:openrelay.metered.ca:443?transport=tcp',
+          'turns:openrelay.metered.ca:443?transport=tcp',
+        ],
+        username: 'openrelayproject',
+        credential: 'openrelayproject',
+      },
+      {
+        urls: ['turn:eu-0.turn.peerjs.com:3478', 'turn:us-0.turn.peerjs.com:3478'],
+        username: 'peerjs',
+        credential: 'peerjsp',
+      },
+    ],
+    sdpSemantics: 'unified-plan',
+  },
+};
 
 const freshRoomState = (players: Player[] = []): RoomState => ({
   players,
@@ -109,6 +134,7 @@ const initialiseScrumPoker = () => {
   let toastTimer: number | undefined;
   let cheatCodeBuffer = '';
   let timerInterval: number | undefined;
+  let connectionTimeout: number | undefined;
 
   const showToast = (message: string) => {
     toast.textContent = message;
@@ -370,6 +396,10 @@ const initialiseScrumPoker = () => {
   const registerGuest = (connection: DataConnection) => {
     connections.set(connection.peer, connection);
     connection.on('data', (data) => handleHostMessage(connection, data as PokerMessage));
+    connection.on('error', () => {
+      connections.delete(connection.peer);
+      showToast('A participant could not establish a WebRTC connection');
+    });
     connection.on('close', () => {
       connections.delete(connection.peer);
       state = { ...state, players: state.players.filter((player) => player.id !== connection.peer) };
@@ -380,6 +410,8 @@ const initialiseScrumPoker = () => {
   };
 
   const destroyPeer = () => {
+    window.clearTimeout(connectionTimeout);
+    connectionTimeout = undefined;
     hostConnection?.close();
     for (const connection of connections.values()) connection.close();
     connections.clear();
@@ -405,7 +437,7 @@ const initialiseScrumPoker = () => {
     currentRoom = roomCode;
     isRoomOwner = true;
     setConnection('Opening room', 'connecting');
-    peer = new Peer(hostPeerId(currentRoom), { debug: 1 });
+    peer = new Peer(hostPeerId(currentRoom), PEER_OPTIONS);
 
     peer.on('open', (id) => {
       localPlayerId = id;
@@ -414,7 +446,15 @@ const initialiseScrumPoker = () => {
       setConnection('Peer-to-peer room live', 'connected');
     });
     peer.on('connection', registerGuest);
-    peer.on('error', () => {
+    peer.on('error', (error) => {
+      if (error.type === 'webrtc') {
+        showToast('A participant could not establish a WebRTC connection');
+        return;
+      }
+      if (error.type === 'unavailable-id' && SPECIAL_ROOMS.has(currentRoom)) {
+        joinRoom(localName, currentRoom);
+        return;
+      }
       destroyPeer();
       showError('The room could not be opened. Check your connection and try again.');
     });
@@ -430,18 +470,25 @@ const initialiseScrumPoker = () => {
     roomLabel.textContent = currentRoom;
     updateUrl(currentRoom);
     setConnection('Finding facilitator', 'connecting');
-    peer = new Peer({ debug: 1 });
+    peer = new Peer(PEER_OPTIONS);
 
     peer.on('open', (id) => {
       localPlayerId = id;
       hostConnection = peer!.connect(hostPeerId(currentRoom), { reliable: true });
+      connectionTimeout = window.setTimeout(() => {
+        if (hostConnection?.open) return;
+        destroyPeer();
+        showError(`Room ${currentRoom} was found, but a secure WebRTC connection could not be established. Try again or change networks.`);
+      }, 15_000);
       hostConnection.on('open', () => {
+        window.clearTimeout(connectionTimeout);
+        connectionTimeout = undefined;
         hostConnection!.send({
           type: 'join',
           name: localName,
           wantsFacilitator: localStorage.getItem(FACILITATOR_STORAGE_KEY) === 'true',
         } satisfies PokerMessage);
-        setConnection('Connected directly', 'connected');
+        setConnection('Connected securely', 'connected');
         sessionStorage.setItem('scrum-poker-name', localName);
       });
       hostConnection.on('data', (data) => {
@@ -451,7 +498,14 @@ const initialiseScrumPoker = () => {
           render();
         }
       });
-      hostConnection.on('close', () => setConnection('Facilitator disconnected', 'disconnected'));
+      hostConnection.on('close', () => {
+        window.clearTimeout(connectionTimeout);
+        connectionTimeout = undefined;
+        setConnection('Facilitator disconnected', 'disconnected');
+      });
+      hostConnection.on('error', () => {
+        setConnection('WebRTC connection failed', 'disconnected');
+      });
     });
     peer.on('error', (error) => {
       destroyPeer();
