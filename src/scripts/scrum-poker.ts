@@ -86,7 +86,14 @@ const normaliseRoomCode = (value: string) => value
   .replace(/^-|-$/g, '')
   .slice(0, 32);
 
-const hostPeerId = (roomCode: string) => `brijesh-scrum-${roomCode.toLowerCase()}`;
+const namedRoomSession = () => new Date().toISOString().slice(0, 10).replaceAll('-', '');
+
+const hostPeerId = (roomCode: string) => {
+  const roomId = roomCode.toLowerCase();
+  return SPECIAL_ROOMS.has(roomCode)
+    ? `brijesh-scrum-${roomId}-${namedRoomSession()}`
+    : `brijesh-scrum-${roomId}`;
+};
 
 let disposeCurrentRoom: (() => void) | undefined;
 
