@@ -12,9 +12,15 @@ interface Props {
   article?: boolean;
 }
 
-const { title, description, image = portrait.src, article = false } = Astro.props;
+const {
+  title,
+  description,
+  image = portrait.src,
+  article = false,
+} = Astro.props;
 const canonical = new URL(Astro.url.pathname, Astro.site);
-const pageTitle = title === 'Brijesh Bhakta' ? title : `${title} — Brijesh Bhakta`;
+const pageTitle =
+  title === 'Brijesh Bhakta' ? title : `${title} — Brijesh Bhakta`;
 const socialImage = new URL(image, Astro.site);
 ---
 
@@ -31,18 +37,23 @@ const socialImage = new URL(image, Astro.site);
         let theme = 'light';
         try {
           const saved = localStorage.getItem('theme');
-          theme = saved === 'light' || saved === 'dark'
-            ? saved
-            : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          theme =
+            saved === 'light' || saved === 'dark'
+              ? saved
+              : matchMedia('(prefers-color-scheme: dark)').matches
+                ? 'dark'
+                : 'light';
         } catch {
-          theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          theme = matchMedia('(prefers-color-scheme: dark)').matches
+            ? 'dark'
+            : 'light';
         }
         document.documentElement.dataset.theme = theme;
       })();
     </script>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
-    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta property="og:type" content={article ? 'article' : 'website'} />
     <meta property="og:title" content={pageTitle} />
     <meta property="og:description" content={description} />
@@ -56,10 +67,17 @@ const socialImage = new URL(image, Astro.site);
     <title>{pageTitle}</title>
   </head>
   <body>
-    <a class="fixed -top-24 left-4 z-20 bg-foreground px-4 py-3 text-background focus:top-4" href="#main-content">Skip to content</a>
-    <div class="mx-auto w-[min(1380px,calc(100%-48px))] max-mobile:w-[min(100%-28px,1380px)]">
+    <a
+      class="fixed -top-24 left-4 z-20 bg-foreground px-4 py-3 text-background focus:top-4"
+      href="#main-content">Skip to content</a
+    >
+    <div
+      class="mx-auto w-[min(1380px,calc(100%-48px))] max-mobile:w-[min(100%-28px,1380px)]"
+    >
       <SiteHeader />
-      <main id="main-content" class="[view-transition-name:page-content]"><slot /></main>
+      <main id="main-content" class="[view-transition-name:page-content]">
+        <slot />
+      </main>
       <SiteFooter />
     </div>
     <script>
@@ -79,7 +97,9 @@ const socialImage = new URL(image, Astro.site);
       document.addEventListener('astro:before-swap', (event) => {
         const theme = savedTheme();
         if (theme) {
-          (event as Event & { newDocument: Document }).newDocument.documentElement.dataset.theme = theme;
+          (
+            event as Event & { newDocument: Document }
+          ).newDocument.documentElement.dataset.theme = theme;
         }
       });
 
