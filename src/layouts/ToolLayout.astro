@@ -23,18 +23,23 @@ const pageTitle = `${title} — Brijesh Bhakta`;
         let theme = 'light';
         try {
           const saved = localStorage.getItem('theme');
-          theme = saved === 'light' || saved === 'dark'
-            ? saved
-            : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          theme =
+            saved === 'light' || saved === 'dark'
+              ? saved
+              : matchMedia('(prefers-color-scheme: dark)').matches
+                ? 'dark'
+                : 'light';
         } catch {
-          theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          theme = matchMedia('(prefers-color-scheme: dark)').matches
+            ? 'dark'
+            : 'light';
         }
         document.documentElement.dataset.theme = theme;
       })();
     </script>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
-    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta property="og:type" content="website" />
     <meta property="og:title" content={pageTitle} />
     <meta property="og:description" content={description} />
@@ -44,16 +49,32 @@ const pageTitle = `${title} — Brijesh Bhakta`;
     <title>{pageTitle}</title>
   </head>
   <body>
-    <a class="fixed -top-24 left-4 z-20 bg-foreground px-4 py-3 text-background focus:top-4" href="#tool-content">Skip to tool</a>
-    <div class="mx-auto w-[min(1500px,calc(100%-48px))] max-mobile:w-[min(100%-28px,1500px)]">
+    <a
+      class="fixed -top-24 left-4 z-20 bg-foreground px-4 py-3 text-background focus:top-4"
+      href="#tool-content">Skip to tool</a
+    >
+    <div
+      class="mx-auto w-[min(1500px,calc(100%-48px))] max-mobile:w-[min(100%-28px,1500px)]"
+    >
       <slot />
-      <footer class="flex items-center justify-center gap-1.5 border-t border-rule py-6 text-sm text-muted">
+      <footer
+        class="flex items-center justify-center gap-1.5 border-t border-rule py-6 text-sm text-muted"
+      >
         Made with
         <span class="sr-only">love</span>
-        <svg class="size-3.5 fill-accent" viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M12 21s-7.5-4.4-9.6-8.4C.5 9 2.1 4.5 6.3 3.4c2.3-.6 4.5.3 5.7 2 1.2-1.7 3.4-2.6 5.7-2 4.2 1.1 5.8 5.6 3.9 9.2C19.5 16.6 12 21 12 21Z" />
+        <svg
+          class="size-3.5 fill-accent"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path
+            d="M12 21s-7.5-4.4-9.6-8.4C.5 9 2.1 4.5 6.3 3.4c2.3-.6 4.5.3 5.7 2 1.2-1.7 3.4-2.6 5.7-2 4.2 1.1 5.8 5.6 3.9 9.2C19.5 16.6 12 21 12 21Z"
+          ></path>
         </svg>
-        by <a class="text-foreground underline decoration-rule underline-offset-4 hover:decoration-accent" href="/">Brijesh</a>
+        by <a
+          class="text-foreground underline decoration-rule underline-offset-4 hover:decoration-accent"
+          href="/">Brijesh</a
+        >
       </footer>
     </div>
     <script>
@@ -61,12 +82,15 @@ const pageTitle = `${title} — Brijesh Bhakta`;
         const background = getComputedStyle(document.documentElement)
           .getPropertyValue('--site-background')
           .trim();
-        document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
+        document
+          .querySelector<HTMLMetaElement>('meta[name="theme-color"]')
           ?.setAttribute('content', background);
       };
 
       const setupToolThemeToggle = () => {
-        const toggle = document.querySelector<HTMLButtonElement>('[data-tool-theme-toggle]');
+        const toggle = document.querySelector<HTMLButtonElement>(
+          '[data-tool-theme-toggle]',
+        );
         if (!toggle || toggle.dataset.ready === 'true') return;
 
         try {
@@ -86,11 +110,16 @@ const pageTitle = `${title} — Brijesh Bhakta`;
         };
 
         toggle.dataset.ready = 'true';
-        updateToggle(document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
+        updateToggle(
+          document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light',
+        );
         updateToolThemeColor();
 
         toggle.addEventListener('click', () => {
-          const theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+          const theme =
+            document.documentElement.dataset.theme === 'dark'
+              ? 'light'
+              : 'dark';
           document.documentElement.dataset.theme = theme;
           localStorage.setItem('theme', theme);
           updateToggle(theme);
