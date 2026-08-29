@@ -6,9 +6,12 @@ export default defineConfig({
   site: 'https://brijeshbhakta.com',
   output: 'static',
   publicDir: './static',
-  integrations: [sitemap({
-    filter: (page) => page !== 'https://brijeshbhakta.com/getting-started-with-es6/',
-  })],
+  integrations: [
+    sitemap({
+      filter: (page) =>
+        page !== 'https://brijeshbhakta.com/getting-started-with-es6/',
+    }),
+  ],
   vite: {
     plugins: [tailwindcss()],
   },
