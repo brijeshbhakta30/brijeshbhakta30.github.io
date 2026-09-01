@@ -11,7 +11,7 @@ import {
   votingStatusLabel,
   type RoomAction,
   type RoomState,
-} from './scrum-poker-state.ts';
+} from './state.ts';
 
 const action = <T extends RoomAction['type']>(
   type: T,

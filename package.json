@@ -13,7 +13,7 @@
     "start": "ASTRO_TELEMETRY_DISABLED=1 astro dev",
     "build": "ASTRO_TELEMETRY_DISABLED=1 astro check && ASTRO_TELEMETRY_DISABLED=1 astro build",
     "check": "ASTRO_TELEMETRY_DISABLED=1 astro check",
-    "test": "node --test src/scripts/scrum-poker-state.test.ts",
+    "test": "node --test src/**/*.test.ts",
     "lint": "prettier --check src",
     "preview": "ASTRO_TELEMETRY_DISABLED=1 astro preview",
     "format": "prettier --write .",

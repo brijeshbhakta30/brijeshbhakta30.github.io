@@ -1,0 +1,363 @@
+.scrum-table {
+  position: relative;
+  min-height: 500px;
+  overflow: hidden;
+  border: 1px solid var(--site-rule);
+  border-radius: 48% / 26%;
+  background:
+    radial-gradient(circle at center,
+      color-mix(in srgb, var(--site-surface) 82%, transparent),
+      transparent 65%),
+    var(--site-surface);
+  box-shadow:
+    inset 0 0 0 10px var(--site-background),
+    inset 0 0 0 11px var(--site-rule);
+}
+
+.scrum-profile-dialog[open] {
+  animation: scrum-result-enter 180ms ease-out both;
+}
+
+.scrum-profile-dialog::backdrop {
+  backdrop-filter: blur(2px);
+}
+
+.scrum-table-copy {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(360px, 55%);
+  text-align: center;
+  transform: translate(-50%, -50%);
+}
+
+.scrum-table-copy:has(.scrum-results:not(.hidden)) {
+  inset: 2.75rem 2.25rem;
+  width: auto;
+  transform: none;
+}
+
+.scrum-table-copy:has(.scrum-results:not(.hidden)) .scrum-round-overview {
+  display: none;
+}
+
+.scrum-results {
+  display: grid;
+  height: 100%;
+  grid-template-columns: minmax(118px, 22%) minmax(210px, 1fr) minmax(140px,
+      25%);
+  align-items: center;
+  gap: 1rem;
+  transform-origin: center;
+}
+
+.scrum-results.hidden {
+  display: none;
+}
+
+.scrum-result-summary {
+  grid-column: 1;
+}
+
+.scrum-result-stats {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.scrum-distribution-panel {
+  grid-column: 3;
+  min-width: 0;
+  padding: 1rem;
+  border-left: 1px solid var(--site-rule);
+  background: color-mix(in srgb, var(--site-background) 54%, transparent);
+}
+
+.scrum-results.is-entering {
+  animation: scrum-result-enter 320ms ease-out both;
+}
+
+.scrum-result-stat {
+  border: 1px solid var(--site-rule);
+  background: color-mix(in srgb, var(--site-background) 76%, transparent);
+  padding: 0.65rem 0.4rem;
+}
+
+.scrum-timer {
+  display: inline-block;
+  min-width: 4.5rem;
+  border-bottom: 1px solid transparent;
+  transform-origin: center;
+}
+
+.scrum-timer.is-running {
+  border-color: color-mix(in srgb, var(--site-accent) 55%, transparent);
+  color: var(--site-accent);
+  animation: scrum-timer-tick 1s ease-in-out infinite;
+}
+
+.scrum-timer.is-urgent {
+  border-color: var(--site-accent);
+  animation-duration: 600ms;
+}
+
+.scrum-players {
+  position: absolute;
+  inset: 1.5rem;
+  pointer-events: none;
+}
+
+.scrum-players.is-revealed {
+  inset: 3.5rem 27% 3.5rem 24%;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(62px, 82px));
+  place-content: center;
+  align-items: start;
+  gap: 1rem 0.55rem;
+}
+
+.scrum-player {
+  position: absolute;
+  top: calc(50% + sin(var(--angle)) * 43%);
+  left: calc(50% + cos(var(--angle)) * 45%);
+  width: 82px;
+  text-align: center;
+  transform: translate(-50%, -50%);
+}
+
+.scrum-players.is-revealed .scrum-player {
+  position: static;
+  width: auto;
+  min-width: 0;
+  transform: none;
+}
+
+.scrum-players.is-revealed .scrum-player-role {
+  display: none;
+}
+
+.scrum-player-card {
+  display: grid;
+  width: 46px;
+  height: 64px;
+  margin: 0 auto 0.4rem;
+  place-items: center;
+  border: 1px solid var(--site-rule);
+  border-radius: 5px;
+  background: var(--site-background);
+  color: var(--site-text);
+  font-family: var(--font-serif);
+  font-size: 1.4rem;
+  box-shadow: 3px 3px 0 var(--site-rule);
+  transition:
+    transform 180ms ease,
+    background 180ms ease;
+}
+
+.scrum-player-card.is-voted:not(.is-revealed) {
+  border-color: var(--site-accent);
+  background:
+    repeating-linear-gradient(135deg,
+      transparent 0 5px,
+      color-mix(in srgb, var(--site-accent) 22%, transparent) 5px 7px),
+    var(--site-background);
+  color: transparent;
+  transform: translateY(-4px) rotate(-2deg);
+}
+
+.scrum-player-card.is-revealed {
+  border-color: var(--site-accent);
+  color: var(--site-accent);
+  transform: translateY(-4px) rotate(2deg);
+}
+
+.scrum-player-card.is-reveal-entering {
+  animation: scrum-card-reveal 380ms cubic-bezier(0.2, 0.72, 0.25, 1) both;
+  backface-visibility: hidden;
+}
+
+.scrum-player-name {
+  display: block;
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scrum-player-role {
+  display: block;
+  color: var(--site-text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.scrum-hand {
+  display: flex;
+  gap: 0.65rem;
+  overflow-x: auto;
+  padding: 0.5rem 0 1rem;
+  scrollbar-color: var(--site-rule) transparent;
+}
+
+.scrum-hand-card {
+  display: grid;
+  flex: 0 0 58px;
+  height: 82px;
+  cursor: pointer;
+  place-items: center;
+  border: 1px solid var(--site-rule);
+  border-radius: 5px;
+  background: var(--site-surface);
+  color: var(--site-text);
+  font-family: var(--font-serif);
+  font-size: 1.55rem;
+  box-shadow: 3px 3px 0 var(--site-rule);
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.scrum-hand-card:not(:disabled):hover {
+  border-color: var(--site-accent);
+  color: var(--site-accent);
+  transform: translateY(-5px);
+}
+
+.scrum-hand-card[aria-pressed='true'] {
+  border-color: var(--site-accent);
+  background: var(--site-accent);
+  color: var(--site-background);
+  box-shadow: 4px 6px 0 color-mix(in srgb, var(--site-accent) 35%, transparent);
+  transform: translateY(-7px);
+}
+
+.scrum-hand-card:disabled {
+  cursor: not-allowed;
+  opacity: 0.38;
+  box-shadow: 2px 2px 0 var(--site-rule);
+  transform: none;
+}
+
+@keyframes scrum-timer-tick {
+
+  0%,
+  100% {
+    opacity: 0.78;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.025);
+  }
+}
+
+@keyframes scrum-card-reveal {
+  0% {
+    opacity: 0.25;
+    transform: translate(var(--throw-x), var(--throw-y)) rotateY(72deg) rotate(-8deg) scale(0.88);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translate(0, -4px) rotateY(0deg) rotate(2deg) scale(1);
+  }
+}
+
+@keyframes scrum-result-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.975);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (max-width: 47.5rem) {
+  .scrum-table {
+    min-height: 640px;
+    border-radius: 32px;
+  }
+
+  .scrum-players {
+    inset: 1rem;
+  }
+
+  .scrum-player {
+    top: calc(50% + sin(var(--angle)) * 44%);
+    left: calc(50% + cos(var(--angle)) * 42%);
+    width: 66px;
+  }
+
+  .scrum-table-copy {
+    width: 52%;
+  }
+
+  .scrum-table-copy:has(.scrum-results:not(.hidden)) {
+    inset: 1.75rem;
+    width: auto;
+  }
+
+  .scrum-results {
+    grid-template: auto minmax(220px, 1fr) auto / minmax(0, 1fr);
+    gap: 0.75rem;
+  }
+
+  .scrum-result-summary {
+    grid-row: 1;
+    grid-column: 1;
+  }
+
+  .scrum-result-summary>p:first-child {
+    margin-bottom: 0.5rem;
+  }
+
+  .scrum-result-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .scrum-result-summary #consensus-label {
+    margin-top: 0.5rem;
+  }
+
+  .scrum-distribution-panel {
+    grid-row: 3;
+    grid-column: 1;
+    padding: 0.75rem 1rem;
+    border-top: 1px solid var(--site-rule);
+    border-left: 0;
+  }
+
+  .scrum-distribution-panel>p {
+    margin-bottom: 0.5rem;
+  }
+
+  .scrum-players.is-revealed {
+    inset: 175px 1.75rem 135px;
+    grid-template-columns: repeat(auto-fit, minmax(58px, 72px));
+    gap: 0.8rem 0.35rem;
+  }
+
+  .scrum-result-stat {
+    padding: 0.45rem 0.2rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .scrum-player-card,
+  .scrum-hand-card,
+  .scrum-timer,
+  .scrum-results,
+  .scrum-profile-dialog {
+    animation: none;
+    transition: none;
+  }
+}
