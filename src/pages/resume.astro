@@ -2,29 +2,90 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 ---
 
-<BaseLayout title="Résumé" description="Résumé and professional summary for software engineer Brijesh Bhakta.">
-  <header class="border-b border-rule pt-[clamp(4.5rem,9vw,9rem)] pb-[clamp(3rem,6vw,6rem)]">
-    <p class="mb-5 font-mono text-base font-semibold tracking-[0.12em] text-accent uppercase before:content-['//_']">Résumé</p>
-    <h1 class="mb-8 max-w-[980px] font-serif text-[clamp(3.4rem,7vw,7rem)] leading-[0.98] font-normal tracking-[-0.035em]">A decade across product engineering.</h1>
-    <p class="max-w-[720px] text-[clamp(1.2rem,2vw,1.55rem)] leading-normal text-secondary">Backend services, web applications, and mobile product infrastructure, grounded in a Computer Engineering education.</p>
+<BaseLayout
+  title="Resume"
+  description="Resume and professional summary for software engineer Brijesh Bhakta."
+>
+  <header
+    class="border-b border-rule pt-[clamp(4.5rem,9vw,9rem)] pb-[clamp(3rem,6vw,6rem)]"
+  >
+    <p
+      class="mb-5 font-mono text-base font-semibold tracking-[0.12em] text-accent uppercase before:content-['//_']"
+    >
+      Resume
+    </p>
+    <h1
+      class="mb-8 max-w-[980px] font-serif text-[clamp(3.4rem,7vw,7rem)] leading-[0.98] font-normal tracking-[-0.035em]"
+    >
+      A decade across product engineering.
+    </h1>
+    <p
+      class="max-w-[720px] text-[clamp(1.2rem,2vw,1.55rem)] leading-normal text-secondary"
+    >
+      Backend services, web applications, and mobile product infrastructure,
+      grounded in a Computer Engineering education.
+    </p>
   </header>
-  <section class="grid grid-cols-[1fr_2fr] gap-8 border-b border-rule py-[clamp(5rem,10vw,10rem)] max-mobile:grid-cols-1">
+  <section
+    class="grid grid-cols-[1fr_2fr] gap-8 border-b border-rule py-[clamp(5rem,10vw,10rem)] max-mobile:grid-cols-1"
+  >
     <div>
-      <p class="mb-5 font-mono text-base font-semibold tracking-[0.12em] text-accent uppercase before:content-['//_']">Document archive</p>
-      <p class="border-l-[3px] border-accent bg-surface px-6 py-5">The existing PDF is preserved exactly as it appeared in this repository. It was last updated in 2018, so some details and positioning are historical.</p>
+      <p
+        class="mb-5 font-mono text-base font-semibold tracking-[0.12em] text-accent uppercase before:content-['//_']"
+      >
+        Document archive
+      </p>
+      <p class="border-l-[3px] border-accent bg-surface px-6 py-5">
+        The existing PDF is preserved exactly as it appeared in this repository.
+        It was last updated in 2018, so some details and positioning are
+        historical.
+      </p>
     </div>
     <div class="max-w-[760px]">
-      <h2 class="mb-8 font-serif text-[clamp(2.4rem,5vw,5rem)] leading-[0.98] font-normal tracking-[-0.035em]">Original résumé</h2>
-      <p class="max-w-[720px] text-[clamp(1.2rem,2vw,1.55rem)] leading-normal text-secondary">Download the archived five-page résumé for education, early professional experience, skills, and project details.</p>
-      <a class="font-mono text-[0.8rem] font-semibold tracking-[0.06em] text-accent uppercase" href="/resume.pdf" download>Download PDF résumé ↓</a>
+      <h2
+        class="mb-8 font-serif text-[clamp(2.4rem,5vw,5rem)] leading-[0.98] font-normal tracking-[-0.035em]"
+      >
+        Original resume
+      </h2>
+      <p
+        class="max-w-[720px] text-[clamp(1.2rem,2vw,1.55rem)] leading-normal text-secondary"
+      >
+        Download the archived five-page resume for education, early professional
+        experience, skills, and project details.
+      </p>
+      <a
+        class="font-mono text-[0.8rem] font-semibold tracking-[0.06em] text-accent uppercase"
+        href="/resume.pdf"
+        download>Download PDF resume ↓</a
+      >
     </div>
   </section>
   <section class="border-b border-rule py-[clamp(5rem,10vw,10rem)]">
-    <p class="mb-5 font-mono text-base font-semibold tracking-[0.12em] text-accent uppercase before:content-['//_']">At a glance</p>
-    <div class="grid grid-cols-3 gap-12 max-mobile:grid-cols-1 [&_h3]:font-serif [&_h3]:text-[1.7rem] [&_h3]:font-normal [&_p]:text-secondary">
-      <article><h3>Experience</h3><p>10 years in software development, beginning with an engineering internship in January 2016.</p></article>
-      <article><h3>Range</h3><p>Documented work across Node.js, Java, Python, PHP, React, Angular, relational databases, and MongoDB.</p></article>
-      <article><h3>Education</h3><p>B.Tech in Computer Engineering, Uka Tarsadia University, 2016.</p></article>
+    <p
+      class="mb-5 font-mono text-base font-semibold tracking-[0.12em] text-accent uppercase before:content-['//_']"
+    >
+      At a glance
+    </p>
+    <div
+      class="grid grid-cols-3 gap-12 max-mobile:grid-cols-1 [&_h3]:font-serif [&_h3]:text-[1.7rem] [&_h3]:font-normal [&_p]:text-secondary"
+    >
+      <article>
+        <h3>Experience</h3><p>
+          10 years in software development, beginning with an engineering
+          internship in January 2016.
+        </p>
+      </article>
+      <article>
+        <h3>Range</h3><p>
+          Documented work across Node.js, Java, Python, PHP, React, Angular,
+          relational databases, and MongoDB.
+        </p>
+      </article>
+      <article>
+        <h3>Education</h3><p>
+          B.Tech in Computer Engineering, Uka Tarsadia University, 2016.
+        </p>
+      </article>
     </div>
   </section>
 </BaseLayout>

@@ -2,31 +2,100 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 
 const projects = [
-  { area: 'Backend / Operations', tech: 'MEAN stack · SQL Server', title: 'Server administration', description: 'A system for managing and monitoring more than one hundred documented SQL Server instances. Asynchronous health checks fed an open dashboard, while administrators controlled the monitored inventory.' },
-  { area: 'Backend / Identity', tech: 'Java · Python · Node.js', title: 'Identity and access management', description: 'A central authentication service used for single sign-on. The documented contribution connected social authentication through a Node.js service and Python enrolment workflow.' },
-  { area: 'Web / Finance', tech: 'React · Data visualisation', title: 'Investment portfolio management', description: 'A billing area within a wealth-management platform, including dashboard charts, detailed year-and-quarter portfolio views, and next-invoice estimates based on usage and previous invoices.' },
-  { area: 'Web / Marketplace', tech: 'MEAN stack · Stripe Connect', title: 'Online tutoring platform', description: 'Tutor search, availability and booking workflows connected to a virtual classroom, with Stripe Connect payments and administrative tutor verification.' },
-  { area: 'Mobile / Connected devices', tech: 'Mobile app · Node.js', title: 'IP camera service', description: 'Backend services for a mobile security product where people could add or share cameras, inspect events, and access footage remotely.' },
-  { area: 'Mobile / On demand', tech: 'Mobile app · Node.js · Stripe Connect', title: 'Local services platform', description: 'A request-and-notification workflow matching people with service providers, with provider-managed Stripe accounts handling payments.' },
+  {
+    area: 'Backend / Operations',
+    tech: 'MEAN stack · SQL Server',
+    title: 'Server administration',
+    description:
+      'A system for managing and monitoring more than one hundred documented SQL Server instances. Asynchronous health checks fed an open dashboard, while administrators controlled the monitored inventory.',
+  },
+  {
+    area: 'Backend / Identity',
+    tech: 'Java · Python · Node.js',
+    title: 'Identity and access management',
+    description:
+      'A central authentication service used for single sign-on. The documented contribution connected social authentication through a Node.js service and Python enrolment workflow.',
+  },
+  {
+    area: 'Web / Finance',
+    tech: 'React · Data visualisation',
+    title: 'Investment portfolio management',
+    description:
+      'A billing area within a wealth-management platform, including dashboard charts, detailed year-and-quarter portfolio views, and next-invoice estimates based on usage and previous invoices.',
+  },
+  {
+    area: 'Web / Marketplace',
+    tech: 'MEAN stack · Stripe Connect',
+    title: 'Online tutoring platform',
+    description:
+      'Tutor search, availability and booking workflows connected to a virtual classroom, with Stripe Connect payments and administrative tutor verification.',
+  },
+  {
+    area: 'Mobile / Connected devices',
+    tech: 'Mobile app · Node.js',
+    title: 'IP camera service',
+    description:
+      'Backend services for a mobile security product where people could add or share cameras, inspect events, and access footage remotely.',
+  },
+  {
+    area: 'Mobile / On demand',
+    tech: 'Mobile app · Node.js · Stripe Connect',
+    title: 'Local services platform',
+    description:
+      'A request-and-notification workflow matching people with service providers, with provider-managed Stripe accounts handling payments.',
+  },
 ];
 ---
 
-<BaseLayout title="Work" description="Selected backend, web, and mobile product work from Brijesh Bhakta's portfolio archive.">
-  <header class="border-b border-rule pt-[clamp(4.5rem,9vw,9rem)] pb-[clamp(3rem,6vw,6rem)]">
-    <p class="mb-5 font-mono text-base font-semibold tracking-[0.12em] text-accent uppercase before:content-['//_']">Selected work</p>
-    <h1 class="mb-8 max-w-[980px] font-serif text-[clamp(3.4rem,7vw,7rem)] leading-[0.98] font-normal tracking-[-0.035em]">Engineering across systems and screens.</h1>
-    <p class="max-w-[720px] text-[clamp(1.2rem,2vw,1.55rem)] leading-normal text-secondary">A selection from my earlier portfolio, spanning backend infrastructure, complex web applications, and mobile-connected services.</p>
+<BaseLayout
+  title="Work"
+  description="Selected backend, web, and mobile product work from Brijesh Bhakta's portfolio archive."
+>
+  <header
+    class="border-b border-rule pt-[clamp(4.5rem,9vw,9rem)] pb-[clamp(3rem,6vw,6rem)]"
+  >
+    <p
+      class="mb-5 font-mono text-base font-semibold tracking-[0.12em] text-accent uppercase before:content-['//_']"
+    >
+      Selected work
+    </p>
+    <h1
+      class="mb-8 max-w-[980px] font-serif text-[clamp(3.4rem,7vw,7rem)] leading-[0.98] font-normal tracking-[-0.035em]"
+    >
+      Engineering across systems and screens.
+    </h1>
+    <p
+      class="max-w-[720px] text-[clamp(1.2rem,2vw,1.55rem)] leading-normal text-secondary"
+    >
+      A selection from my earlier portfolio, spanning backend infrastructure,
+      complex web applications, and mobile-connected services.
+    </p>
   </header>
-  <section class="border-b border-rule py-[clamp(5rem,10vw,10rem)]" aria-label="Project archive">
-    <p class="border-l-[3px] border-accent bg-surface px-6 py-5"><strong>Archive note:</strong> These summaries are based on the existing résumé and describe earlier work. Client and employer names are intentionally omitted where they were not part of the original public record.</p>
+  <section
+    class="border-b border-rule py-[clamp(5rem,10vw,10rem)]"
+    aria-label="Project archive"
+  >
+    <p class="border-l-[3px] border-accent bg-surface px-6 py-5">
+      <strong>Archive note:</strong> These summaries are based on the existing resume
+      and describe earlier work. Client and employer names are intentionally omitted
+      where they were not part of the original public record.
+    </p>
     <div class="mt-16 border-t border-rule">
-      {projects.map((project) => (
-        <article class="grid grid-cols-[1fr_2fr_2fr] gap-8 border-b border-rule py-8 max-mobile:grid-cols-1 max-mobile:gap-3">
-          <p class="m-0 font-mono text-sm tracking-[0.06em] uppercase">{project.area}<br />{project.tech}</p>
-          <h3 class="m-0 font-serif text-[clamp(1.6rem,3vw,2.7rem)] font-normal leading-[1.2]">{project.title}</h3>
-          <p class="m-0 text-secondary">{project.description}</p>
-        </article>
-      ))}
+      {
+        projects.map((project) => (
+          <article class="grid grid-cols-[1fr_2fr_2fr] gap-8 border-b border-rule py-8 max-mobile:grid-cols-1 max-mobile:gap-3">
+            <p class="m-0 font-mono text-sm tracking-[0.06em] uppercase">
+              {project.area}
+              <br />
+              {project.tech}
+            </p>
+            <h3 class="m-0 font-serif text-[clamp(1.6rem,3vw,2.7rem)] font-normal leading-[1.2]">
+              {project.title}
+            </h3>
+            <p class="m-0 text-secondary">{project.description}</p>
+          </article>
+        ))
+      }
     </div>
   </section>
 </BaseLayout>

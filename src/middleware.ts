@@ -7,6 +7,6 @@ export const onRequest = defineMiddleware((context, next) => {
   if (!match) return next();
 
   const target = new URL('/tools/scrum-poker', context.url);
-  target.searchParams.set('room', match[1]);
+  target.searchParams.set('room', match[1].toUpperCase());
   return context.rewrite(target);
 });

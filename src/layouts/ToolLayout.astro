@@ -77,58 +77,6 @@ const pageTitle = `${title} — Brijesh Bhakta`;
         >
       </footer>
     </div>
-    <script>
-      const updateToolThemeColor = () => {
-        const background = getComputedStyle(document.documentElement)
-          .getPropertyValue('--site-background')
-          .trim();
-        document
-          .querySelector<HTMLMetaElement>('meta[name="theme-color"]')
-          ?.setAttribute('content', background);
-      };
-
-      const setupToolThemeToggle = () => {
-        const toggle = document.querySelector<HTMLButtonElement>(
-          '[data-tool-theme-toggle]',
-        );
-        if (!toggle || toggle.dataset.ready === 'true') return;
-
-        try {
-          const saved = localStorage.getItem('theme');
-          if (saved === 'light' || saved === 'dark') {
-            document.documentElement.dataset.theme = saved;
-          }
-        } catch {
-          // The inline layout script has already applied the system preference.
-        }
-
-        const updateToggle = (theme: 'light' | 'dark') => {
-          const nextTheme = theme === 'dark' ? 'light' : 'dark';
-          const label = `Switch to ${nextTheme} mode`;
-          toggle.setAttribute('aria-label', label);
-          toggle.setAttribute('title', label);
-        };
-
-        toggle.dataset.ready = 'true';
-        updateToggle(
-          document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light',
-        );
-        updateToolThemeColor();
-
-        toggle.addEventListener('click', () => {
-          const theme =
-            document.documentElement.dataset.theme === 'dark'
-              ? 'light'
-              : 'dark';
-          document.documentElement.dataset.theme = theme;
-          localStorage.setItem('theme', theme);
-          updateToggle(theme);
-          updateToolThemeColor();
-        });
-      };
-
-      setupToolThemeToggle();
-      document.addEventListener('astro:page-load', setupToolThemeToggle);
-    </script>
+    <script src="../scripts/theme.ts"></script>
   </body>
 </html>

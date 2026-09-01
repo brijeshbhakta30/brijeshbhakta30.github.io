@@ -81,33 +81,13 @@ const socialImage = new URL(image, Astro.site);
       <SiteFooter />
     </div>
     <script>
-      const savedTheme = () => {
-        try {
-          const theme = localStorage.getItem('theme');
-          return theme === 'light' || theme === 'dark' ? theme : undefined;
-        } catch {
-          return undefined;
-        }
-      };
-
       document.addEventListener('astro:before-preparation', () => {
         document.documentElement.dataset.navigating = 'true';
       });
-
-      document.addEventListener('astro:before-swap', (event) => {
-        const theme = savedTheme();
-        if (theme) {
-          (
-            event as Event & { newDocument: Document }
-          ).newDocument.documentElement.dataset.theme = theme;
-        }
-      });
-
       document.addEventListener('astro:page-load', () => {
-        const theme = savedTheme();
-        if (theme) document.documentElement.dataset.theme = theme;
         delete document.documentElement.dataset.navigating;
       });
     </script>
+    <script src="../scripts/theme.ts"></script>
   </body>
 </html>
