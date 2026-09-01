@@ -11,7 +11,7 @@ export const makeRoomCode = () =>
     (byte) => ROOM_ALPHABET[byte % ROOM_ALPHABET.length],
   ).join('');
 
-export const normaliseRoomCode = (value: string) =>
+export const normalizeRoomCode = (value: string) =>
   value
     .trim()
     .toUpperCase()
@@ -41,7 +41,7 @@ export const roomFromLocation = () => {
   const pathRoom = match ? decodeURIComponent(match[1]) : '';
   const queryRoom =
     new URLSearchParams(window.location.search).get('room') ?? '';
-  return normaliseRoomCode(pathRoom || queryRoom);
+  return normalizeRoomCode(pathRoom || queryRoom);
 };
 
 export const saveProfileName = (name: string) => {

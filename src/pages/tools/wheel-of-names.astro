@@ -1,0 +1,124 @@
+---
+import ToolLayout from '../../layouts/ToolLayout.astro';
+
+import '../../styles/wheel-of-names.css';
+---
+
+<ToolLayout
+  title="Wheel of Names"
+  description="A simple, private random name picker that works in your browser."
+>
+  <div id="tool-content" class="wheel-tool" data-wheel-tool>
+    <header class="wheel-header">
+      <div>
+        <p class="wheel-kicker">Wheel of Names</p>
+        <h1>Let the wheel decide.</h1>
+      </div>
+      <button
+        class="wheel-icon-button"
+        type="button"
+        data-tool-theme-toggle
+        aria-label="Switch color theme"
+        title="Switch color theme"
+      >
+        <span class="wheel-theme-light" aria-hidden="true">☾</span>
+        <span class="wheel-theme-dark" aria-hidden="true">☀</span>
+      </button>
+    </header>
+
+    <main class="wheel-layout">
+      <section aria-labelledby="wheel-title">
+        <div class="wheel-section-heading">
+          <div>
+            <p class="wheel-eyebrow">Pick one</p>
+            <h2 id="wheel-title">Spin the wheel</h2>
+          </div>
+          <span data-entry-count class="wheel-count" aria-live="polite"></span>
+        </div>
+
+        <div class="wheel-stage">
+          <canvas
+            data-wheel-canvas
+            class="wheel-canvas"
+            role="button"
+            tabindex="0"
+            aria-label="Name wheel. Use the Spin button to choose a winner."
+          ></canvas>
+          <span class="wheel-pointer" aria-hidden="true">◀</span>
+          <p data-empty-message class="wheel-empty" hidden>
+            Add at least two entries
+          </p>
+        </div>
+
+        <div class="wheel-spin-controls" aria-label="Spin controls">
+          <button
+            data-spin
+            type="button"
+            class="wheel-button wheel-button--primary wheel-spin"
+          >
+            Spin
+          </button>
+        </div>
+      </section>
+
+      <aside class="wheel-panel" aria-labelledby="entries-title">
+        <div class="wheel-panel-heading">
+          <h2 id="entries-title">Entries</h2>
+          <button data-clear type="button" class="wheel-text-button"
+            >Clear</button
+          >
+        </div>
+        <p class="wheel-help">
+          Enter one name or choice per line. Your list stays in this browser.
+        </p>
+
+        <label class="wheel-visually-hidden" for="wheel-entries"
+          >Names or choices</label
+        >
+        <textarea
+          id="wheel-entries"
+          data-wheel-entries
+          rows="14"
+          spellcheck="false"
+          class="wheel-entries"
+          placeholder={'Ada\nGrace\nLinus'}></textarea>
+
+        <div class="wheel-entry-actions">
+          <button data-shuffle type="button" class="wheel-button"
+            >Shuffle</button
+          >
+          <button data-sort type="button" class="wheel-button">Sort A–Z</button>
+        </div>
+
+        <label class="wheel-checkbox">
+          <input data-remove-winner type="checkbox" />
+          <span>
+            <strong>Remove winners automatically</strong>
+            <small>Useful when everyone should be picked once.</small>
+          </span>
+        </label>
+      </aside>
+    </main>
+
+    <dialog data-winner-dialog class="wheel-dialog">
+      <div class="wheel-dialog-content">
+        <p class="wheel-eyebrow">The wheel picked</p>
+        <p data-winner-name class="wheel-winner"></p>
+        <div class="wheel-dialog-actions">
+          <button
+            data-close-winner
+            type="button"
+            class="wheel-button wheel-button--primary">Done</button
+          >
+          <button data-remove-dialog-winner type="button" class="wheel-button"
+            >Remove winner</button
+          >
+        </div>
+      </div>
+    </dialog>
+  </div>
+</ToolLayout>
+
+<script>
+  import '../../scripts/wheel-of-names';
+</script>

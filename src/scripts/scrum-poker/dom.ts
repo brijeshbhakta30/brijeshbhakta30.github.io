@@ -44,8 +44,8 @@ export type ScrumPokerElements = {
 
 export const queryScrumPokerElements = () => {
   const root = document.querySelector<HTMLElement>('[data-scrum-tool]');
-  if (!root || root.dataset.initialised === 'true') return null;
-  root.dataset.initialised = 'true';
+  if (!root || root.dataset.initialized === 'true') return null;
+  root.dataset.initialized = 'true';
 
   const find = <T extends HTMLElement>(selector: string) =>
     root.querySelector<T>(selector)!;

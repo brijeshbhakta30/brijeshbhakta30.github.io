@@ -154,7 +154,7 @@ const playerTemplate = (
   clocks: { membership: clock, name: clock, vote: ZERO_CLOCK },
 });
 
-export const normaliseTimerDuration = (value: number) =>
+export const normalizeTimerDuration = (value: number) =>
   Math.min(MAX_TIMER_SECONDS, Math.max(MIN_TIMER_SECONDS, Math.round(value)));
 
 export const applyRoomAction = (
@@ -298,7 +298,7 @@ export const applyRoomAction = (
       return state;
     return {
       ...state,
-      timerDuration: normaliseTimerDuration(action.payload.duration),
+      timerDuration: normalizeTimerDuration(action.payload.duration),
       timerEndsAt: action.payload.endsAt,
       autoReveal: action.payload.autoReveal,
       clocks: { ...state.clocks, timer: clock },

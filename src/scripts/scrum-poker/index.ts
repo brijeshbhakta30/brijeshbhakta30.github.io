@@ -5,7 +5,7 @@ import {
   applyRoomAction,
   freshRoomState,
   makeRandomId,
-  normaliseTimerDuration,
+  normalizeTimerDuration,
   type RoomAction,
   type RoomState,
 } from './state';
@@ -33,7 +33,7 @@ import {
   inviteUrl,
   loadLocalVote,
   makeRoomCode,
-  normaliseRoomCode,
+  normalizeRoomCode,
   persistLocalVote as storeLocalVote,
   roomFromLocation,
   roomIdentity,
@@ -45,7 +45,7 @@ import {
 
 let disposeCurrentRoom: (() => void) | undefined;
 
-const initialiseScrumPoker = () => {
+const initializeScrumPoker = () => {
   const elements = queryScrumPokerElements();
   if (!elements) return;
 
@@ -55,7 +55,7 @@ const initialiseScrumPoker = () => {
   let localPeerId = '';
   let localName = '';
   let localVote: string | null = null;
-  let lamport = 0;
+  let logicalClock = 0;
   let toastTimer: number | undefined;
   let timerInterval: number | undefined;
   let presenceInterval: number | undefined;
@@ -67,7 +67,7 @@ const initialiseScrumPoker = () => {
 
   const setState = (nextState: RoomState) => {
     state = nextState;
-    lamport = Math.max(lamport, state.version);
+    logicalClock = Math.max(logicalClock, state.version);
   };
 
   const showToast = (message: string) => {
@@ -118,11 +118,11 @@ const initialiseScrumPoker = () => {
     type: T,
     payload: Extract<RoomAction, { type: T }>['payload'],
   ) => {
-    lamport = Math.max(lamport, state.version) + 1;
+    logicalClock = Math.max(logicalClock, state.version) + 1;
     return {
-      id: `${String(lamport).padStart(10, '0')}-${localPlayerId}-${makeRandomId()}`,
+      id: `${String(logicalClock).padStart(10, '0')}-${localPlayerId}-${makeRandomId()}`,
       actorId: localPlayerId,
-      counter: lamport,
+      counter: logicalClock,
       type,
       payload,
     } as Extract<RoomAction, { type: T }>;
@@ -147,7 +147,7 @@ const initialiseScrumPoker = () => {
   };
 
   const processAction = (action: RoomAction, shouldRelay: boolean) => {
-    lamport = Math.max(lamport, action.counter);
+    logicalClock = Math.max(logicalClock, action.counter);
     const wasRevealed = state.revealed;
     const previousRoundId = state.roundId;
     state = applyRoomAction(state, action);
@@ -273,10 +273,10 @@ const initialiseScrumPoker = () => {
   const startRoom = (name: string, roomCode: string) => {
     network.destroy();
     localName = saveProfileName(name);
-    currentRoom = normaliseRoomCode(roomCode) || makeRoomCode();
+    currentRoom = normalizeRoomCode(roomCode) || makeRoomCode();
     localPlayerId = roomIdentity(currentRoom);
     state = freshRoomState();
-    lamport = 0;
+    logicalClock = 0;
     lastJoinAnnouncedAt = 0;
     localVote = null;
     enterRoom();
@@ -284,7 +284,7 @@ const initialiseScrumPoker = () => {
   };
 
   const timerSettings = () => ({
-    duration: normaliseTimerDuration(
+    duration: normalizeTimerDuration(
       Number(elements.timerInput.value) || DEFAULT_TIMER_SECONDS,
     ),
     autoReveal: elements.autoRevealInput.checked,
@@ -318,7 +318,7 @@ const initialiseScrumPoker = () => {
 
   elements.createForm.addEventListener('submit', (event) => {
     event.preventDefault();
-    elements.createRoomInput.value = normaliseRoomCode(
+    elements.createRoomInput.value = normalizeRoomCode(
       elements.createRoomInput.value,
     );
     if (elements.createForm.reportValidity())
@@ -329,15 +329,15 @@ const initialiseScrumPoker = () => {
   });
   elements.joinForm.addEventListener('submit', (event) => {
     event.preventDefault();
-    elements.roomInput.value = normaliseRoomCode(elements.roomInput.value);
+    elements.roomInput.value = normalizeRoomCode(elements.roomInput.value);
     if (elements.joinForm.reportValidity())
       startRoom(elements.joinName.value, elements.roomInput.value);
   });
   elements.roomInput.addEventListener('input', () => {
-    elements.roomInput.value = normaliseRoomCode(elements.roomInput.value);
+    elements.roomInput.value = normalizeRoomCode(elements.roomInput.value);
   });
   elements.createRoomInput.addEventListener('input', () => {
-    elements.createRoomInput.value = normaliseRoomCode(
+    elements.createRoomInput.value = normalizeRoomCode(
       elements.createRoomInput.value,
     );
   });
@@ -516,9 +516,9 @@ const initialiseScrumPoker = () => {
   };
 };
 
-document.addEventListener('astro:page-load', initialiseScrumPoker);
+document.addEventListener('astro:page-load', initializeScrumPoker);
 document.addEventListener('astro:before-swap', () => {
   disposeCurrentRoom?.();
   disposeCurrentRoom = undefined;
 });
-initialiseScrumPoker();
+initializeScrumPoker();
