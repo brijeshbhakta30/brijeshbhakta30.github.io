@@ -138,9 +138,9 @@ export const createScrumPokerNetwork = ({
   const connections = new Map<string, DataConnection>();
   const connectionParticipants = new Map<string, string>();
   const diagnostics = new Map<string, ConnectionDiagnostics>();
-  const reconnectTimers = new Map<string, number>();
-  const connectionAttemptTimers = new Map<string, number>();
-  let registryRetryTimer: number | undefined;
+  const reconnectTimers = new Map<string, ReturnType<typeof setInterval>>();
+  const connectionAttemptTimers = new Map<string, ReturnType<typeof setInterval>>();
+  let registryRetryTimer: ReturnType<typeof setInterval> | undefined;
   let seenMessages = new Set<string>();
   let disposed = false;
 
