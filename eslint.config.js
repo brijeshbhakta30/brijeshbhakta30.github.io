@@ -1,7 +1,9 @@
+import css from '@eslint/css';
 import { createConfig } from 'eslint-config-blazex';
 import eslintPluginAstro from 'eslint-plugin-astro';
 import jsxA11y from 'eslint-plugin-jsx-a11y';
 import eslintPluginTailwindcss from 'eslint-plugin-tailwindcss';
+import { tailwind4 } from 'tailwind-csstree';
 
 const tailwindcssConfig = eslintPluginTailwindcss.configs.recommended;
 const tailwindcssRules = {
@@ -37,6 +39,21 @@ export default [
     unicorn: true,
     perfectionist: true,
   }),
+  {
+    files: ['**/*.css'],
+    plugins: {
+      css,
+    },
+    language: 'css/css',
+    languageOptions: {
+      customSyntax: tailwind4,
+    },
+    rules: {
+      'css/no-duplicate-imports': 'error',
+      'css/no-empty-blocks': 'error',
+      'css/no-invalid-at-rules': 'error',
+    },
+  },
   {
     ...tailwindcssConfig,
     settings: tailwindcssSettings,

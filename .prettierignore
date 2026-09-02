@@ -1,0 +1,12 @@
+dist/
+.astro/
+node_modules/
+pnpm-lock.yaml
+static/
+
+# Formatted by ESLint, not Prettier
+*.astro
+*.js
+*.mjs
+*.cjs
+*.ts

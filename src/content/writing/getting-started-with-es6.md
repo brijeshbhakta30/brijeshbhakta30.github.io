@@ -125,6 +125,7 @@ The difference between `let` and `const` is that if the variable is going to cha
 A value must be provided at the time of declaration of `const` variable. If you try to reassign a value to `const` variable, an error will be thrown (Uncaught TypeError: Assignment to constant variable).
 
 Example:
+
 ```js
 const PI = 3.14; // const is used here as value of PI is never going to change
 const r = 5; // Assuming value of r will be set dynamically
@@ -253,13 +254,12 @@ const { data: { records } } = res;
 console.log(records); // [1, 2]
 ```
 
-
-
 ## Enhanced Object Literals
 
 Enhanced Object Literals things like property value shorthands, computed property keys and method shorthand.
 
 Here is an property value shorthand example:
+
 ```js
 // ES5
 var data = [{ something: 'Important' }];
@@ -272,6 +272,7 @@ return { data };
 ```
 
 Here is an computed property keys example:
+
 ```js
 // ES5
 var name = 'Arya';
@@ -286,6 +287,7 @@ console.log(starks); // { Arya: { house: 'Stark', ability: 'many-faced gods' } }
 ```
 
 We have already used method shorthand in class. Here is an another example:
+
 ```js
 // ES5
 var calculations = {
@@ -333,7 +335,7 @@ console.log(`The addition of a and b is ${add(a, b)}.`); // The number is 15.
 // Using ternary operator.
 console.log(`The addition of the numbers a and b is ${add(a, b) % 2 === 0 ? 'even' : 'odd'}.`);
 
-// Multi line 
+// Multi line
 
 // Without template literals
 console.log('Text from line 1\n' +
@@ -347,16 +349,17 @@ Text from line 2`);
 // Text from line 1
 // Text from line 2
 ```
+
 ## Iterators
 
 ES6 gives many inbuilt functions to iterate over the arrays. This functions are fast and can avoid potential bugs or errors.
 Do not use any loop to iterate over the array like `for-of, for` etc.
 
-   > Use `map()` / `every()` / `filter()` / `find()` / `findIndex()` / `reduce()` / `some()` / ... to iterate over arrays, and `Object.keys()` / `Object.values()` / `Object.entries()` to produce arrays so you can iterate over objects.
+> Use `map()` / `every()` / `filter()` / `find()` / `findIndex()` / `reduce()` / `some()` / ... to iterate over arrays, and `Object.keys()` / `Object.values()` / `Object.entries()` to produce arrays so you can iterate over objects.
 
 Documentation for above methods can be found on [mozilla](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array).
 
-Some examples: 
+Some examples:
 
 ```js
 const numbers = [1, 2, 3, 4, 5];
@@ -398,4 +401,5 @@ function asyncExample(waitTime = 3000) {
 
 asyncExample(5000).then(() => console.log('Will be logged after 5 secs.'));
 ```
+
 There is much to be learned for the promises and luckly [Mozilla](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise) has a really good documentation.

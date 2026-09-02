@@ -1,52 +1,56 @@
 {
-  "name": "brijeshbhakta30.github.io",
-  "version": "2.0.0",
-  "packageManager": "pnpm@11.24.0",
-  "engines": {
-    "node": ">=24"
-  },
-  "private": true,
-  "type": "module",
-  "description": "Brijesh Bhakta's portfolio and writing, built with Astro.",
-  "scripts": {
-    "dev": "ASTRO_TELEMETRY_DISABLED=1 astro dev --host 0.0.0.0",
-    "start": "ASTRO_TELEMETRY_DISABLED=1 astro dev",
-    "build": "ASTRO_TELEMETRY_DISABLED=1 astro check && ASTRO_TELEMETRY_DISABLED=1 astro build",
-    "check": "ASTRO_TELEMETRY_DISABLED=1 astro check",
-    "test": "node --test src/**/*.test.ts",
-    "lint": "eslint src ./*.js ./*.mjs",
-    "preview": "ASTRO_TELEMETRY_DISABLED=1 astro preview",
-    "lint-staged": "lint-staged",
-    "commitlint": "commitlint",
-    "prepare": "husky"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/brijeshbhakta30/brijeshbhakta30.github.io.git"
-  },
-  "author": "Brijesh Bhakta",
-  "homepage": "https://brijeshbhakta.com",
-  "dependencies": {
-    "@astrojs/check": "0.9.10",
-    "@astrojs/sitemap": "3.7.3",
-    "@tailwindcss/vite": "4.3.3",
-    "astro": "7.2.9",
-    "peerjs": "1.5.5",
-    "sharp": "0.35.4",
-    "tailwindcss": "4.3.3",
-    "typescript": "6.0.3"
-  },
-  "devDependencies": {
-    "@commitlint/cli": "21.2.2",
-    "@commitlint/config-conventional": "21.2.2",
-    "devmoji": "2.3.0",
-    "eslint": "9.39.5",
-    "eslint-config-blazex": "0.0.36",
-    "eslint-plugin-astro": "1.7.0",
-    "eslint-plugin-jsx-a11y": "6.10.2",
-    "eslint-plugin-tailwindcss": "4.4.0",
-    "husky": "9.1.7",
-    "lint-staged": "17.4.1",
-    "typescript-eslint": "8.69.0"
-  }
+	"name": "brijeshbhakta30.github.io",
+	"version": "2.0.0",
+	"packageManager": "pnpm@11.24.0",
+	"engines": {
+		"node": ">=24"
+	},
+	"private": true,
+	"type": "module",
+	"description": "Brijesh Bhakta's portfolio and writing, built with Astro.",
+	"scripts": {
+		"dev": "ASTRO_TELEMETRY_DISABLED=1 astro dev --host 0.0.0.0",
+		"start": "ASTRO_TELEMETRY_DISABLED=1 astro dev",
+		"build": "ASTRO_TELEMETRY_DISABLED=1 astro check && ASTRO_TELEMETRY_DISABLED=1 astro build",
+		"check": "ASTRO_TELEMETRY_DISABLED=1 astro check",
+		"test": "node --test src/**/*.test.ts",
+		"lint": "eslint src ./*.js ./*.mjs && prettier --check src",
+		"lint:fix": "eslint src ./*.js ./*.mjs --fix && prettier --write src",
+		"preview": "ASTRO_TELEMETRY_DISABLED=1 astro preview",
+		"lint-staged": "lint-staged",
+		"commitlint": "commitlint",
+		"prepare": "husky"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/brijeshbhakta30/brijeshbhakta30.github.io.git"
+	},
+	"author": "Brijesh Bhakta",
+	"homepage": "https://brijeshbhakta.com",
+	"dependencies": {
+		"@astrojs/check": "0.9.10",
+		"@astrojs/sitemap": "3.7.3",
+		"@tailwindcss/vite": "4.3.3",
+		"astro": "7.2.9",
+		"peerjs": "1.5.5",
+		"sharp": "0.35.4",
+		"tailwindcss": "4.3.3",
+		"typescript": "6.0.3"
+	},
+	"devDependencies": {
+		"@commitlint/cli": "21.2.2",
+		"@commitlint/config-conventional": "21.2.2",
+		"@eslint/css": "1.4.0",
+		"devmoji": "2.3.0",
+		"eslint": "9.39.5",
+		"eslint-config-blazex": "0.0.36",
+		"eslint-plugin-astro": "1.7.0",
+		"eslint-plugin-jsx-a11y": "6.10.2",
+		"eslint-plugin-tailwindcss": "4.4.0",
+		"husky": "9.1.7",
+		"lint-staged": "17.4.1",
+		"prettier": "3.9.6",
+		"tailwind-csstree": "0.3.3",
+		"typescript-eslint": "8.69.0"
+	}
 }

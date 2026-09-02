@@ -1,4 +1,9 @@
 /* eslint-disable unicorn/filename-case */
 export default {
-  '*.{astro,css,js,mjs,cjs,ts}': 'eslint --fix',
+  '*.{astro,js,mjs,cjs,ts}': 'eslint --fix',
+  '*.css': [
+    'eslint --fix',
+    'prettier --write',
+  ],
+  '*.{json,md,yaml,yml}': 'prettier --write',
 };
