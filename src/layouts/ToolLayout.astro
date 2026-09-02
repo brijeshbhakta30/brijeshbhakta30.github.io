@@ -26,9 +26,9 @@ const pageTitle = `${title} — Brijesh Bhakta`;
           theme =
             saved === 'light' || saved === 'dark'
               ? saved
-              : matchMedia('(prefers-color-scheme: dark)').matches
-                ? 'dark'
-                : 'light';
+              : (matchMedia('(prefers-color-scheme: dark)').matches
+          ? 'dark'
+          : 'light');
         } catch {
           theme = matchMedia('(prefers-color-scheme: dark)').matches
             ? 'dark'

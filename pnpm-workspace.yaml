@@ -1,5 +1,10 @@
 allowBuilds:
   esbuild: true
   sharp: true
+  unrs-resolver: true
+
+minimumReleaseAgeExclude:
+  - eslint-config-blazex
+
 saveExact: true
 storeDir: .pnpm-store

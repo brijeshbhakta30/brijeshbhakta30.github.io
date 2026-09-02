@@ -91,8 +91,8 @@ export const makeRandomId = () => {
     return globalThis.crypto.randomUUID();
 
   const bytes = globalThis.crypto.getRandomValues(new Uint8Array(16));
-  bytes[6] = (bytes[6] & 0x0f) | 0x40;
-  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  bytes[6] = (bytes[6] & 0x0F) | 0x40;
+  bytes[8] = (bytes[8] & 0x3F) | 0x80;
   const hex = [...bytes].map((byte) => byte.toString(16).padStart(2, '0'));
   return `${hex.slice(0, 4).join('')}-${hex.slice(4, 6).join('')}-${hex.slice(6, 8).join('')}-${hex.slice(8, 10).join('')}-${hex.slice(10).join('')}`;
 };
@@ -157,159 +157,245 @@ const playerTemplate = (
 export const normalizeTimerDuration = (value: number) =>
   Math.min(MAX_TIMER_SECONDS, Math.max(MIN_TIMER_SECONDS, Math.round(value)));
 
+type JoinAction = Extract<RoomAction, { type: 'join' }>;
+type LeaveAction = Extract<RoomAction, { type: 'leave' }>;
+type RenameAction = Extract<RoomAction, { type: 'rename' }>;
+type VoteAction = Extract<RoomAction, { type: 'vote' }>;
+type NewRoundAction = Extract<RoomAction, { type: 'new-round' }>;
+type RevealAction = Extract<RoomAction, { type: 'reveal' }>;
+type TimerAction = Extract<RoomAction, { type: 'timer' }>;
+type VotingConfigAction = Extract<RoomAction, { type: 'voting-config' }>;
+
+const applyJoinAction = (
+  state: RoomState,
+  action: JoinAction,
+  clock: Clock,
+): RoomState => {
+  const { playerId, peerId, name, now } = action.payload;
+  const existing = state.players.find((player) => player.id === playerId);
+  if (!existing) {
+    return {
+      ...state,
+      players: [
+        ...state.players,
+        playerTemplate(playerId, peerId, name, now, clock),
+      ],
+    };
+  }
+  if (!newer(clock, existing.clocks.membership)) return state;
+  return {
+    ...state,
+    players: state.players.map((player) =>
+      player.id === playerId
+        ? {
+            ...player,
+            peerId,
+            name: name || player.name,
+            lastSeenAt: now,
+            pageHidden: false,
+            removed: false,
+            clocks: {
+              ...player.clocks,
+              membership: clock,
+              name: newer(clock, player.clocks.name)
+                ? clock
+                : player.clocks.name,
+            },
+          }
+        : player,
+    ),
+  };
+};
+
+const applyLeaveAction = (
+  state: RoomState,
+  action: LeaveAction,
+  clock: Clock,
+): RoomState => ({
+  ...state,
+  players: state.players.map((player) =>
+    player.id === action.payload.playerId && newer(clock, player.clocks.membership)
+      ? {
+          ...player,
+          removed: true,
+          clocks: { ...player.clocks, membership: clock },
+        }
+      : player,
+  ),
+});
+
+const applyRenameAction = (
+  state: RoomState,
+  action: RenameAction,
+  clock: Clock,
+): RoomState => ({
+  ...state,
+  players: state.players.map((player) =>
+    player.id === action.payload.playerId && newer(clock, player.clocks.name)
+      ? {
+          ...player,
+          name: action.payload.name,
+          clocks: { ...player.clocks, name: clock },
+        }
+      : player,
+  ),
+});
+
+const applyVoteAction = (
+  state: RoomState,
+  action: VoteAction,
+  clock: Clock,
+): RoomState => {
+  if (action.payload.roundId !== state.roundId) return state;
+  return {
+    ...state,
+    players: state.players.map((player) =>
+      player.id === action.payload.playerId && newer(clock, player.clocks.vote)
+        ? {
+            ...player,
+            hasVoted: action.payload.hasVoted,
+            vote: action.payload.vote,
+            voteRoundId: action.payload.roundId,
+            clocks: { ...player.clocks, vote: clock },
+          }
+        : player,
+    ),
+  };
+};
+
+const applyNewRoundAction = (
+  state: RoomState,
+  action: NewRoundAction,
+  clock: Clock,
+): RoomState => {
+  const isNextRound = action.payload.baseRoundId === state.roundId;
+  const isConcurrentCandidate =
+    action.payload.baseRoundId === state.roundBaseId &&
+    state.roundId !== action.payload.baseRoundId;
+  if (
+    (!isNextRound && !isConcurrentCandidate) ||
+    !newer(clock, state.clocks.round)
+  )
+    return state;
+  return {
+    ...state,
+    round: isNextRound ? state.round + 1 : state.round,
+    roundBaseId: action.payload.baseRoundId,
+    roundId: action.id,
+    revealed: false,
+    timerEndsAt: null,
+    clocks: { ...state.clocks, round: clock, reveal: clock, timer: clock },
+  };
+};
+
+const applyRevealAction = (
+  state: RoomState,
+  action: RevealAction,
+  clock: Clock,
+): RoomState => {
+  if (
+    action.payload.roundId !== state.roundId ||
+    !newer(clock, state.clocks.reveal)
+  )
+    return state;
+  return {
+    ...state,
+    revealed: true,
+    timerEndsAt: null,
+    clocks: { ...state.clocks, reveal: clock, timer: clock },
+  };
+};
+
+const applyTimerAction = (
+  state: RoomState,
+  action: TimerAction,
+  clock: Clock,
+): RoomState => {
+  if (
+    action.payload.roundId !== state.roundId ||
+    !newer(clock, state.clocks.timer)
+  )
+    return state;
+  return {
+    ...state,
+    timerDuration: normalizeTimerDuration(action.payload.duration),
+    timerEndsAt: action.payload.endsAt,
+    autoReveal: action.payload.autoReveal,
+    clocks: { ...state.clocks, timer: clock },
+  };
+};
+
+const applyVotingConfigAction = (
+  state: RoomState,
+  action: VotingConfigAction,
+  clock: Clock,
+): RoomState =>
+  newer(clock, state.clocks.votingConfig)
+    ? {
+        ...state,
+        allowVoteChangesAfterReveal:
+          action.payload.allowVoteChangesAfterReveal,
+        clocks: { ...state.clocks, votingConfig: clock },
+      }
+    : state;
+
 export const applyRoomAction = (
   current: RoomState,
   action: RoomAction,
 ): RoomState => {
   const clock = actionClock(action);
-  let state = {
+  const state = {
     ...current,
     version: Math.max(current.version, action.counter),
   };
 
-  if (action.type === 'join') {
-    const { playerId, peerId, name, now } = action.payload;
-    const existing = state.players.find((player) => player.id === playerId);
-    if (!existing) {
-      return {
-        ...state,
-        players: [
-          ...state.players,
-          playerTemplate(playerId, peerId, name, now, clock),
-        ],
-      };
-    }
-    if (!newer(clock, existing.clocks.membership)) return state;
-    return {
-      ...state,
-      players: state.players.map((player) =>
-        player.id === playerId
-          ? {
-              ...player,
-              peerId,
-              name: name || player.name,
-              lastSeenAt: now,
-              pageHidden: false,
-              removed: false,
-              clocks: {
-                ...player.clocks,
-                membership: clock,
-                name: newer(clock, player.clocks.name)
-                  ? clock
-                  : player.clocks.name,
-              },
-            }
-          : player,
-      ),
-    };
+  switch (action.type) {
+    case 'join':
+      return applyJoinAction(state, action, clock);
+    case 'leave':
+      return applyLeaveAction(state, action, clock);
+    case 'new-round':
+      return applyNewRoundAction(state, action, clock);
+    case 'rename':
+      return applyRenameAction(state, action, clock);
+    case 'reveal':
+      return applyRevealAction(state, action, clock);
+    case 'timer':
+      return applyTimerAction(state, action, clock);
+    case 'vote':
+      return applyVoteAction(state, action, clock);
+    case 'voting-config':
+      return applyVotingConfigAction(state, action, clock);
   }
+};
 
-  if (action.type === 'leave') {
-    return {
-      ...state,
-      players: state.players.map((player) =>
-        player.id === action.payload.playerId &&
-        newer(clock, player.clocks.membership)
-          ? {
-              ...player,
-              removed: true,
-              clocks: { ...player.clocks, membership: clock },
-            }
-          : player,
-      ),
-    };
-  }
-
-  if (action.type === 'rename') {
-    return {
-      ...state,
-      players: state.players.map((player) =>
-        player.id === action.payload.playerId &&
-        newer(clock, player.clocks.name)
-          ? {
-              ...player,
-              name: action.payload.name,
-              clocks: { ...player.clocks, name: clock },
-            }
-          : player,
-      ),
-    };
-  }
-
-  if (action.type === 'vote') {
-    if (action.payload.roundId !== state.roundId) return state;
-    return {
-      ...state,
-      players: state.players.map((player) =>
-        player.id === action.payload.playerId &&
-        newer(clock, player.clocks.vote)
-          ? {
-              ...player,
-              hasVoted: action.payload.hasVoted,
-              vote: action.payload.vote,
-              voteRoundId: action.payload.roundId,
-              clocks: { ...player.clocks, vote: clock },
-            }
-          : player,
-      ),
-    };
-  }
-
-  if (action.type === 'new-round') {
-    const isNextRound = action.payload.baseRoundId === state.roundId;
-    const isConcurrentCandidate =
-      action.payload.baseRoundId === state.roundBaseId &&
-      state.roundId !== action.payload.baseRoundId;
-    if (
-      (!isNextRound && !isConcurrentCandidate) ||
-      !newer(clock, state.clocks.round)
-    )
-      return state;
-    return {
-      ...state,
-      round: isNextRound ? state.round + 1 : state.round,
-      roundBaseId: action.payload.baseRoundId,
-      roundId: action.id,
-      revealed: false,
-      timerEndsAt: null,
-      clocks: { ...state.clocks, round: clock, reveal: clock, timer: clock },
-    };
-  }
-
-  if (action.type === 'reveal') {
-    if (
-      action.payload.roundId !== state.roundId ||
-      !newer(clock, state.clocks.reveal)
-    )
-      return state;
-    return {
-      ...state,
-      revealed: true,
-      timerEndsAt: null,
-      clocks: { ...state.clocks, reveal: clock, timer: clock },
-    };
-  }
-
-  if (action.type === 'timer') {
-    if (
-      action.payload.roundId !== state.roundId ||
-      !newer(clock, state.clocks.timer)
-    )
-      return state;
-    return {
-      ...state,
-      timerDuration: normalizeTimerDuration(action.payload.duration),
-      timerEndsAt: action.payload.endsAt,
-      autoReveal: action.payload.autoReveal,
-      clocks: { ...state.clocks, timer: clock },
-    };
-  }
-
-  if (!newer(clock, state.clocks.votingConfig)) return state;
+export const migrateRoomState = (input: RoomState): RoomState => {
+  const fresh = freshRoomState();
+  const raw = input as RoomState & { players?: Partial<Player>[] };
   return {
-    ...state,
-    allowVoteChangesAfterReveal: action.payload.allowVoteChangesAfterReveal,
-    clocks: { ...state.clocks, votingConfig: clock },
+    ...fresh,
+    ...raw,
+    clocks: { ...fresh.clocks, ...raw.clocks },
+    players: (raw.players ?? []).map((rawPlayer) => {
+      const player = rawPlayer as Partial<Player> & { vote?: string | null };
+      return {
+        ...playerTemplate(
+          player.id ?? makeRandomId(),
+          player.peerId ?? player.id ?? '',
+          player.name ?? 'Anonymous',
+          player.lastSeenAt ?? Date.now(),
+          ZERO_CLOCK,
+        ),
+        ...player,
+        hasVoted: player.hasVoted ?? player.vote != null,
+        vote: player.vote === '__hidden__' ? null : (player.vote ?? null),
+        clocks: {
+          membership: player.clocks?.membership ?? ZERO_CLOCK,
+          name: player.clocks?.name ?? ZERO_CLOCK,
+          vote: player.clocks?.vote ?? ZERO_CLOCK,
+        },
+      };
+    }),
   };
 };
 
@@ -402,36 +488,6 @@ export const mergeRoomState = (
   };
 };
 
-export const migrateRoomState = (input: RoomState): RoomState => {
-  const fresh = freshRoomState();
-  const raw = input as RoomState & { players?: Partial<Player>[] };
-  return {
-    ...fresh,
-    ...raw,
-    clocks: { ...fresh.clocks, ...(raw.clocks ?? {}) },
-    players: (raw.players ?? []).map((rawPlayer) => {
-      const player = rawPlayer as Partial<Player> & { vote?: string | null };
-      return {
-        ...playerTemplate(
-          player.id ?? makeRandomId(),
-          player.peerId ?? player.id ?? '',
-          player.name ?? 'Anonymous',
-          player.lastSeenAt ?? Date.now(),
-          ZERO_CLOCK,
-        ),
-        ...player,
-        hasVoted: player.hasVoted ?? player.vote != null,
-        vote: player.vote === '__hidden__' ? null : (player.vote ?? null),
-        clocks: {
-          membership: player.clocks?.membership ?? ZERO_CLOCK,
-          name: player.clocks?.name ?? ZERO_CLOCK,
-          vote: player.clocks?.vote ?? ZERO_CLOCK,
-        },
-      };
-    }),
-  };
-};
-
 export const activePlayers = (state: RoomState) =>
   state.players.filter((player) => !player.removed);
 
@@ -443,7 +499,7 @@ export const presenceFor = (
   const age = Math.max(0, now - player.lastSeenAt);
   if (age >= PRESENCE_TIMEOUT_MS || player.removed) return 'disconnected';
   if (player.pageHidden || age >= PRESENCE_AWAY_MS) return 'away';
-  if (!hasOpenConnection && age > 5_000) return 'reconnecting';
+  if (!hasOpenConnection && age > 5000) return 'reconnecting';
   return 'connected';
 };
 

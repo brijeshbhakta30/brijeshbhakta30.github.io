@@ -11,16 +11,16 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       // GitHub Pages cannot create static files for arbitrary room codes. Its
       // custom 404 is the production fallback; the middleware provides the
       // equivalent rewrite in Astro's development server.
-      const match = window.location.pathname.match(
+      const match = globalThis.location.pathname.match(
         /^\/tools\/scrum-poker\/([^/]+)\/?$/i,
       );
       if (!match) return;
       const roomCode = decodeURIComponent(match[1])
         .toUpperCase()
-        .replace(/[^A-Z0-9]/g, '')
+        .replaceAll(/[^A-Z0-9]/g, '')
         .slice(0, 32);
       if (!roomCode) return;
-      window.location.replace(
+      globalThis.location.replace(
         `/tools/scrum-poker?room=${encodeURIComponent(roomCode)}`,
       );
     })();

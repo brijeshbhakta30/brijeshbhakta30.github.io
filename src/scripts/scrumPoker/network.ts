@@ -1,4 +1,8 @@
 import Peer, { type DataConnection } from 'peerjs';
+
+import type { ConnectionStatus } from './render';
+
+import { DEBUG_SESSION_KEY } from './constants';
 import {
   activePlayers,
   makeRandomId,
@@ -7,8 +11,6 @@ import {
   type RoomAction,
   type RoomState,
 } from './state';
-import { DEBUG_SESSION_KEY } from './constants';
-import type { ConnectionStatus } from './render';
 
 export type ParticipantIdentity = { id: string; peerId: string; name: string };
 
@@ -50,8 +52,8 @@ export type ConnectionDiagnostics = {
 };
 
 const HEARTBEAT_INTERVAL_MS = 10_000;
-const RECONNECT_DELAY_MS = 3_000;
-const REGISTRY_RETRY_MS = 2_000;
+const RECONNECT_DELAY_MS = 3000;
+const REGISTRY_RETRY_MS = 2000;
 
 const configuredStunUrls = (
   import.meta.env.PUBLIC_STUN_URLS ?? 'stun:stun.l.google.com:19302'
@@ -65,10 +67,10 @@ const configuredTurnUrls = (import.meta.env.PUBLIC_TURN_URLS ?? '')
   .map((url: string) => url.trim())
   .filter(Boolean)
   .slice(0, 5);
-const iceServers: RTCIceServer[] = configuredStunUrls.length
+const iceServers: RTCIceServer[] = configuredStunUrls.length > 0
   ? [{ urls: configuredStunUrls }]
   : [];
-if (configuredTurnUrls.length) {
+if (configuredTurnUrls.length > 0) {
   iceServers.push({
     urls: configuredTurnUrls,
     username: import.meta.env.PUBLIC_TURN_USERNAME ?? '',
@@ -146,8 +148,8 @@ export const createScrumPokerNetwork = ({
 
   const rememberSeen = (id: string) => {
     seenMessages.add(id);
-    if (seenMessages.size > 2_000)
-      seenMessages = new Set([...seenMessages].slice(-1_000));
+    if (seenMessages.size > 2000)
+      seenMessages = new Set([...seenMessages].slice(-1000));
   };
 
   const broadcastRaw = (message: unknown, exceptPeerId = '') => {
@@ -198,6 +200,7 @@ export const createScrumPokerNetwork = ({
     };
     diagnostics.set(peerId, row);
     if (DEBUG_BUILD || sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true')
+      // eslint-disable-next-line no-console
       console.debug('[Scrum Poker WebRTC]', reason, row);
   };
 
@@ -208,14 +211,14 @@ export const createScrumPokerNetwork = ({
     const openCount = [...connections.values()].filter(
       (connection) => connection.open,
     ).length;
-    if (!others.length || openCount)
+    if (others.length === 0 || openCount)
       setConnection('Peer-to-peer room live', 'connected');
     else setConnection('Reconnecting…', 'connecting');
   };
 
   const scheduleReconnect = (remotePeerId: string) => {
     if (reconnectTimers.has(remotePeerId) || disposed) return;
-    const timer = window.setTimeout(() => {
+    const timer = globalThis.setTimeout(() => {
       reconnectTimers.delete(remotePeerId);
       if (
         activePlayers(getState()).some(
@@ -236,12 +239,12 @@ export const createScrumPokerNetwork = ({
         connection.close();
       }
       if (rtc.connectionState === 'disconnected') {
-        window.setTimeout(() => {
+        globalThis.setTimeout(() => {
           if (rtc.connectionState === 'disconnected') {
             scheduleReconnect(connection.peer);
             connection.close();
           }
-        }, 8_000);
+        }, 8000);
       }
     };
     for (const eventName of [
@@ -299,10 +302,10 @@ export const createScrumPokerNetwork = ({
     }
     connections.set(connection.peer, connection);
     attachDiagnostics(connection);
-    window.clearTimeout(connectionAttemptTimers.get(connection.peer));
+    globalThis.clearTimeout(connectionAttemptTimers.get(connection.peer));
     connectionAttemptTimers.set(
       connection.peer,
-      window.setTimeout(() => {
+      globalThis.setTimeout(() => {
         connectionAttemptTimers.delete(connection.peer);
         if (connection.open) return;
         if (connections.get(connection.peer) === connection)
@@ -312,9 +315,9 @@ export const createScrumPokerNetwork = ({
       }, 15_000),
     );
     connection.on('open', () => {
-      window.clearTimeout(connectionAttemptTimers.get(connection.peer));
+      globalThis.clearTimeout(connectionAttemptTimers.get(connection.peer));
       connectionAttemptTimers.delete(connection.peer);
-      window.clearTimeout(reconnectTimers.get(connection.peer));
+      globalThis.clearTimeout(reconnectTimers.get(connection.peer));
       reconnectTimers.delete(connection.peer);
       sendOpen(connection, {
         type: 'hello',
@@ -327,9 +330,10 @@ export const createScrumPokerNetwork = ({
       handleDirectMessage(connection, data as DirectMessage | Envelope),
     );
     connection.on('error', (error) => {
-      window.clearTimeout(connectionAttemptTimers.get(connection.peer));
+      globalThis.clearTimeout(connectionAttemptTimers.get(connection.peer));
       connectionAttemptTimers.delete(connection.peer);
       if (DEBUG_BUILD)
+        // eslint-disable-next-line no-console
         console.debug(
           '[Scrum Poker WebRTC] data error',
           connection.peer,
@@ -338,7 +342,7 @@ export const createScrumPokerNetwork = ({
       scheduleReconnect(connection.peer);
     });
     connection.on('close', () => {
-      window.clearTimeout(connectionAttemptTimers.get(connection.peer));
+      globalThis.clearTimeout(connectionAttemptTimers.get(connection.peer));
       connectionAttemptTimers.delete(connection.peer);
       if (connections.get(connection.peer) === connection)
         connections.delete(connection.peer);
@@ -416,12 +420,13 @@ export const createScrumPokerNetwork = ({
 
   const scheduleRegistryElection = () => {
     if (registryPeer || registryRetryTimer || disposed) return;
-    const ids = visiblePlayers()
-      .map((player) => player.id)
-      .concat(getLocalPlayerId())
-      .sort();
-    const index = Math.max(0, ids.indexOf(getLocalPlayerId()));
-    registryRetryTimer = window.setTimeout(
+    const localPlayerId = getLocalPlayerId();
+    const ids = [
+      ...visiblePlayers().map((player) => player.id),
+      localPlayerId,
+    ].toSorted((left, right) => left.localeCompare(right));
+    const index = Math.max(0, ids.indexOf(localPlayerId));
+    registryRetryTimer = globalThis.setTimeout(
       () => {
         registryRetryTimer = undefined;
         claimRegistry();
@@ -439,14 +444,14 @@ export const createScrumPokerNetwork = ({
       metadata: { discovery: true, room: getRoomCode() },
     });
     registryConnection = connection;
-    const attemptTimeout = window.setTimeout(() => {
+    const attemptTimeout = globalThis.setTimeout(() => {
       if (connection.open) return;
       connection.close();
       scheduleRegistryElection();
     }, 15_000);
     connection.on('open', () => {
-      window.clearTimeout(attemptTimeout);
-      window.clearTimeout(registryRetryTimer);
+      globalThis.clearTimeout(attemptTimeout);
+      globalThis.clearTimeout(registryRetryTimer);
       registryRetryTimer = undefined;
       sendOpen(connection, {
         type: 'discover',
@@ -464,7 +469,7 @@ export const createScrumPokerNetwork = ({
       } else if (message.type === 'directory') ensureMesh(message.peerIds);
     });
     const lostRegistry = () => {
-      window.clearTimeout(attemptTimeout);
+      globalThis.clearTimeout(attemptTimeout);
       if (registryConnection === connection) registryConnection = undefined;
       scheduleRegistryElection();
     };
@@ -491,7 +496,7 @@ export const createScrumPokerNetwork = ({
       if (registryPeer === candidate) registryPeer = undefined;
       if (!candidate.destroyed) candidate.destroy();
       if (error.type === 'unavailable-id') {
-        window.setTimeout(connectToRegistry, REGISTRY_RETRY_MS);
+        globalThis.setTimeout(connectToRegistry, REGISTRY_RETRY_MS);
         return;
       }
       scheduleRegistryElection();
@@ -508,6 +513,7 @@ export const createScrumPokerNetwork = ({
         candidate.reconnect();
       } catch (error) {
         if (DEBUG_BUILD)
+          // eslint-disable-next-line no-console
           console.debug(
             '[Scrum Poker WebRTC] discovery reconnect skipped',
             error,
@@ -527,7 +533,7 @@ export const createScrumPokerNetwork = ({
       setLocalPeerId(id);
       roomPeer.on('connection', registerConnection);
       connectToRegistry();
-      window.setTimeout(() => {
+      globalThis.setTimeout(() => {
         if (!registryConnection?.open && !registryPeer)
           scheduleRegistryElection();
       }, REGISTRY_RETRY_MS);
@@ -554,6 +560,7 @@ export const createScrumPokerNetwork = ({
         roomPeer.reconnect();
       } catch (error) {
         if (DEBUG_BUILD)
+          // eslint-disable-next-line no-console
           console.debug('[Scrum Poker WebRTC] reconnect skipped', error);
       }
     });
@@ -561,12 +568,12 @@ export const createScrumPokerNetwork = ({
 
   function destroy() {
     disposed = true;
-    window.clearTimeout(registryRetryTimer);
+    globalThis.clearTimeout(registryRetryTimer);
     registryRetryTimer = undefined;
-    for (const timer of reconnectTimers.values()) window.clearTimeout(timer);
+    for (const timer of reconnectTimers.values()) globalThis.clearTimeout(timer);
     reconnectTimers.clear();
     for (const timer of connectionAttemptTimers.values())
-      window.clearTimeout(timer);
+      globalThis.clearTimeout(timer);
     connectionAttemptTimers.clear();
     registryConnection?.close();
     registryConnection = undefined;

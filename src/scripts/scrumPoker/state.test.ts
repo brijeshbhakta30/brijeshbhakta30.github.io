@@ -1,16 +1,17 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+
 import {
-  PRESENCE_TIMEOUT_MS,
   applyRoomAction,
   freshRoomState,
   makeRandomId,
   mergeRoomState,
+  PRESENCE_TIMEOUT_MS,
   presenceFor,
-  votingStatusFor,
-  votingStatusLabel,
   type RoomAction,
   type RoomState,
+  votingStatusFor,
+  votingStatusLabel,
 } from './state.ts';
 
 const action = <T extends RoomAction['type']>(
@@ -34,7 +35,7 @@ const joined = (): RoomState =>
       playerId: 'a',
       peerId: 'peer-a',
       name: 'Alex',
-      now: 1_000,
+      now: 1000,
     }),
   );
 
@@ -76,7 +77,7 @@ test('a returning participant reclaims the same identity and vote', () => {
       playerId: 'a',
       peerId: 'peer-a-new',
       name: 'Alex',
-      now: 2_000,
+      now: 2000,
     }),
   );
   assert.equal(state.players.length, 1);
@@ -181,7 +182,7 @@ test('sixteen simultaneous joins remain distinct', () => {
         playerId: id,
         peerId: `peer-${index}`,
         name: `Person ${index}`,
-        now: 1_000,
+        now: 1000,
       }),
     );
   }

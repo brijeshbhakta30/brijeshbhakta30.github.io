@@ -4,6 +4,8 @@ import { makeRandomId } from './state';
 const PROFILE_NAME_STORAGE_KEY = 'scrum-poker-name';
 const IDENTITY_STORAGE_PREFIX = 'scrum-poker-identity:';
 const VOTE_STORAGE_PREFIX = 'scrum-poker-vote:';
+const SCRUM_POKER_ROOM_ROUTE_PATTERN =
+  /^\/tools\/scrum-poker\/([^/]+)\/?$/i;
 
 export const makeRoomCode = () =>
   Array.from(
@@ -15,17 +17,17 @@ export const normalizeRoomCode = (value: string) =>
   value
     .trim()
     .toUpperCase()
-    .replace(/[^A-Z0-9]/g, '')
+    .replaceAll(/[^A-Z0-9]/g, '')
     .slice(0, 32);
 
 export const inviteUrl = (roomCode: string) =>
   new URL(
     `/tools/scrum-poker/${encodeURIComponent(roomCode)}`,
-    window.location.origin,
+    globalThis.location.origin,
   ).toString();
 
 export const updateRoomUrl = (roomCode?: string) => {
-  const url = new URL(window.location.href);
+  const url = new URL(globalThis.location.href);
   url.pathname = roomCode
     ? `/tools/scrum-poker/${encodeURIComponent(roomCode)}`
     : '/tools/scrum-poker';
@@ -35,12 +37,12 @@ export const updateRoomUrl = (roomCode?: string) => {
 };
 
 export const roomFromLocation = () => {
-  const match = window.location.pathname.match(
-    /^\/tools\/scrum-poker\/([^/]+)\/?$/i,
+  const match = SCRUM_POKER_ROOM_ROUTE_PATTERN.exec(
+    globalThis.location.pathname,
   );
   const pathRoom = match ? decodeURIComponent(match[1]) : '';
   const queryRoom =
-    new URLSearchParams(window.location.search).get('room') ?? '';
+    new URLSearchParams(globalThis.location.search).get('room') ?? '';
   return normalizeRoomCode(pathRoom || queryRoom);
 };
 

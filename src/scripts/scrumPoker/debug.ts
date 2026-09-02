@@ -1,24 +1,26 @@
-import {
-  activePlayers,
-  presenceFor,
-  votingStatusFor,
-  type Player,
-  type RoomState,
-} from './state';
-import { DEBUG_CHEAT_CODE, DEBUG_SESSION_KEY } from './constants';
+/* eslint-disable no-console */
 import type { ConnectionDiagnostics } from './network';
 
+import { DEBUG_CHEAT_CODE, DEBUG_SESSION_KEY } from './constants';
+import {
+  activePlayers,
+  type Player,
+  presenceFor,
+  type RoomState,
+  votingStatusFor,
+} from './state';
+
+/* eslint-disable no-unused-vars */
 declare global {
-  interface Window {
-    scrumPoker?: {
+    var scrumPoker: {
       help: () => void;
       showValues: () => void;
       showParticipants: () => void;
       showRoomState: () => void;
       showConnections: () => void;
-    };
-  }
+    } | undefined
 }
+/* eslint-enable no-unused-vars */
 
 export const enableDebugApi = ({
   getState,
@@ -42,7 +44,7 @@ export const enableDebugApi = ({
     presenceFor(player, Date.now(), hasOpenConnection(player));
 
   sessionStorage.setItem(DEBUG_SESSION_KEY, 'true');
-  window.scrumPoker = {
+  globalThis.scrumPoker = {
     help: () =>
       console.table([
         {
@@ -76,11 +78,11 @@ export const enableDebugApi = ({
         visiblePlayers().map((player) => ({
           name: player.name,
           estimate:
-            player.voteRoundId !== state.roundId
-              ? '—'
-              : player.id === getLocalPlayerId() && !state.revealed
+            player.voteRoundId === state.roundId
+              ? (player.id === getLocalPlayerId() && !state.revealed
                 ? (getLocalVote() ?? '—')
-                : (player.vote ?? (player.hasVoted ? '?' : '—')),
+                : (player.vote ?? (player.hasVoted ? '?' : '—')))
+              : '—',
           status: votingStatusFor(player, state, playerPresence(player)),
         })),
       );

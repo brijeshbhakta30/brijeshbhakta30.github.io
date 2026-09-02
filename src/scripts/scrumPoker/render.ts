@@ -1,26 +1,27 @@
+import type { ScrumPokerElements } from './dom';
+
+import { CARD_ORDER } from './constants';
 import {
   activePlayers,
-  presenceFor,
-  votingStatusFor,
-  votingStatusLabel,
   type Player,
+  presenceFor,
   type PresenceState,
   type RoomState,
+  votingStatusFor,
+  votingStatusLabel,
 } from './state';
-import { CARD_ORDER } from './constants';
-import type { ScrumPokerElements } from './dom';
 
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected';
 
 export const showToast = (
   elements: ScrumPokerElements,
   message: string,
-  previousTimer: number | undefined,
+  previousTimer: ReturnType<typeof setInterval> | undefined,
 ) => {
   elements.toast.textContent = message;
   elements.toast.classList.remove('translate-y-3', 'opacity-0');
-  window.clearTimeout(previousTimer);
-  return window.setTimeout(
+  globalThis.clearTimeout(previousTimer);
+  return globalThis.setTimeout(
     () => elements.toast.classList.add('translate-y-3', 'opacity-0'),
     2600,
   );
@@ -39,7 +40,7 @@ export const setConnection = (
   status: ConnectionStatus,
 ) => {
   elements.connectionLabel.lastChild!.textContent = ` ${label}`;
-  elements.connectionDot.className = `size-2 rounded-full ${status === 'connected' ? 'bg-accent' : status === 'connecting' ? 'bg-amber-500 animate-pulse' : 'bg-red-500'}`;
+  elements.connectionDot.className = `size-2 rounded-full ${status === 'connected' ? 'bg-accent' : (status === 'connecting' ? 'bg-amber-500 animate-pulse' : 'bg-red-500')}`;
 };
 
 export const updateTimerDisplay = (
@@ -99,10 +100,10 @@ const renderStatistics = (
   elements.statistics.classList.toggle('is-entering', animateReveal);
   if (!state.revealed) return;
   const numbers = numericVotes(players, state);
-  elements.statLow.textContent = numbers.length
+  elements.statLow.textContent = numbers.length > 0
     ? String(Math.min(...numbers))
     : '—';
-  elements.statHigh.textContent = numbers.length
+  elements.statHigh.textContent = numbers.length > 0
     ? String(Math.max(...numbers))
     : '—';
   const votes = players
@@ -115,13 +116,14 @@ const renderStatistics = (
     ? `Consensus reached at ${votes[0]}.`
     : votes.length > 1
       ? 'There is a spread—talk through the assumptions.'
+      // eslint-disable-next-line unicorn/no-nested-ternary
       : votes.length === 1
         ? 'One estimate received.'
         : 'No estimates received.';
   const counts = new Map<string, number>();
   for (const vote of votes) counts.set(vote, (counts.get(vote) ?? 0) + 1);
-  const orderedVotes = [...counts.keys()].sort(compareVoteValues);
-  const highestCount = counts.size ? Math.max(...counts.values()) : 0;
+  const orderedVotes = [...counts.keys()].toSorted(compareVoteValues);
+  const highestCount = counts.size > 0 ? Math.max(...counts.values()) : 0;
   elements.statMostVoted.textContent =
     orderedVotes
       .filter((vote) => counts.get(vote) === highestCount)
@@ -129,7 +131,7 @@ const renderStatistics = (
   elements.distribution.innerHTML = orderedVotes
     .map((card) => {
       const count = counts.get(card)!;
-      const width = votes.length ? (count / votes.length) * 100 : 0;
+      const width = votes.length > 0 ? (count / votes.length) * 100 : 0;
       return `<div class="grid grid-cols-[24px_1fr_20px] items-center gap-2 text-sm"><span class="truncate font-mono" title="${escapeHtml(card)}">${escapeHtml(card)}</span><span class="h-1 bg-rule"><span class="block h-full bg-accent" style="width:${width}%"></span></span><span class="text-right text-muted">${count}</span></div>`;
     })
     .join('');
@@ -176,15 +178,15 @@ export const renderScrumPoker = ({
     );
   };
   const displayedPlayers = state.revealed
-    ? [...players].sort(compareRevealedPlayers)
+    ? players.toSorted(compareRevealedPlayers)
     : players;
 
   elements.roundLabel.textContent = `Round ${state.round}`;
   elements.roundStatus.textContent = state.revealed
     ? 'The cards are on the table'
-    : voted === total && total > 0
+    : (voted === total && total > 0
       ? 'Everyone has voted'
-      : `${voted} of ${total} voted`;
+      : `${voted} of ${total} voted`);
   elements.timerInput.value = String(state.timerDuration);
   elements.autoRevealInput.checked = state.autoReveal;
   elements.allowVoteChangesInput.checked = state.allowVoteChangesAfterReveal;
@@ -223,14 +225,15 @@ export const renderScrumPoker = ({
   for (const button of elements.cardButtons) {
     button.setAttribute(
       'aria-pressed',
+      // eslint-disable-next-line sonarjs/different-types-comparison
       String(button.dataset.card === localVote),
     );
     button.disabled = state.revealed && !state.allowVoteChangesAfterReveal;
   }
   elements.cardHint.textContent = state.revealed
-    ? state.allowVoteChangesAfterReveal
+    ? (state.allowVoteChangesAfterReveal
       ? 'Choose again to update'
-      : 'Voting is locked'
+      : 'Voting is locked')
     : 'Tap again to clear';
   renderStatistics(elements, state, players, animateReveal);
   updateTimerDisplay(elements, state);

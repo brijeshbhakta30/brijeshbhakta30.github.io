@@ -1,6 +1,6 @@
 type Theme = 'light' | 'dark';
 
-const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+const mediaQuery = globalThis.matchMedia('(prefers-color-scheme: dark)');
 
 const explicitTheme = (): Theme | undefined => {
   try {

@@ -1,14 +1,3 @@
-import {
-  DEFAULT_TIMER_SECONDS,
-  PRESENCE_TIMEOUT_MS,
-  activePlayers,
-  applyRoomAction,
-  freshRoomState,
-  makeRandomId,
-  normalizeTimerDuration,
-  type RoomAction,
-  type RoomState,
-} from './state';
 import { DEBUG_SESSION_KEY } from './constants';
 import {
   createDebugCheatCodeHandler,
@@ -16,30 +5,41 @@ import {
 } from './debug';
 import { queryScrumPokerElements } from './dom';
 import {
-  DEBUG_BUILD,
   createScrumPokerNetwork,
+  DEBUG_BUILD,
   type ParticipantIdentity,
   type RelayedMessage,
   type ScrumPokerNetwork,
 } from './network';
 import {
-  renderScrumPoker,
   setConnection as renderConnection,
   showError as renderError,
+  renderScrumPoker,
   showToast as renderToast,
   updateTimerDisplay,
 } from './render';
+import {
+  activePlayers,
+  applyRoomAction,
+  DEFAULT_TIMER_SECONDS,
+  freshRoomState,
+  makeRandomId,
+  normalizeTimerDuration,
+  PRESENCE_TIMEOUT_MS,
+  type RoomAction,
+  type RoomState,
+} from './state';
 import {
   inviteUrl,
   loadLocalVote,
   makeRoomCode,
   normalizeRoomCode,
-  persistLocalVote as storeLocalVote,
   roomFromLocation,
   roomIdentity,
   savedLocalProfileName,
-  saveProfileName as storeProfileName,
   savedProfileName,
+  persistLocalVote as storeLocalVote,
+  saveProfileName as storeProfileName,
   updateRoomUrl,
 } from './storage';
 
@@ -56,9 +56,9 @@ const initializeScrumPoker = () => {
   let localName = '';
   let localVote: string | null = null;
   let logicalClock = 0;
-  let toastTimer: number | undefined;
-  let timerInterval: number | undefined;
-  let presenceInterval: number | undefined;
+  let toastTimer: ReturnType<typeof setInterval> | undefined;
+  let timerInterval: ReturnType<typeof setInterval> | undefined;
+  let presenceInterval: ReturnType<typeof setInterval> | undefined;
   let previouslyRevealed = false;
   let focusResultAfterReveal = false;
   let pendingRoomJoin = '';
@@ -132,6 +132,23 @@ const initializeScrumPoker = () => {
     storeLocalVote(currentRoom, state.roundId, localVote);
   };
 
+  const processAction = (action: RoomAction, shouldRelay: boolean) => {
+    logicalClock = Math.max(logicalClock, action.counter);
+    const wasRevealed = state.revealed;
+    const previousRoundId = state.roundId;
+    state = applyRoomAction(state, action);
+    if (previousRoundId !== state.roundId) {
+      localVote = null;
+      persistLocalVote();
+    }
+    render();
+    if (shouldRelay) network.relay({ type: 'action', action });
+    // eslint-disable-next-line @typescript-eslint/no-use-before-define
+    if (!wasRevealed && state.revealed) publishLocalVote();
+  };
+
+  const dispatchAction = (action: RoomAction) => processAction(action, true);
+
   const publishLocalVote = () => {
     const player = state.players.find((item) => item.id === localPlayerId);
     if (!player || player.voteRoundId !== state.roundId || !player.hasVoted)
@@ -146,26 +163,10 @@ const initializeScrumPoker = () => {
     );
   };
 
-  const processAction = (action: RoomAction, shouldRelay: boolean) => {
-    logicalClock = Math.max(logicalClock, action.counter);
-    const wasRevealed = state.revealed;
-    const previousRoundId = state.roundId;
-    state = applyRoomAction(state, action);
-    if (previousRoundId !== state.roundId) {
-      localVote = null;
-      persistLocalVote();
-    }
-    render();
-    if (shouldRelay) network.relay({ type: 'action', action });
-    if (!wasRevealed && state.revealed) publishLocalVote();
-  };
-
-  const dispatchAction = (action: RoomAction) => processAction(action, true);
-
   const announceJoin = () => {
     if (!localPlayerId || !localPeerId) return;
     const now = Date.now();
-    if (now - lastJoinAnnouncedAt < 1_000) return;
+    if (now - lastJoinAnnouncedAt < 1000) return;
     lastJoinAnnouncedAt = now;
     dispatchAction(
       makeAction('join', {
@@ -345,6 +346,7 @@ const initializeScrumPoker = () => {
     button.addEventListener('click', () => {
       if (state.revealed && !state.allowVoteChangesAfterReveal) return;
       localVote =
+        // eslint-disable-next-line sonarjs/different-types-comparison
         localVote === button.dataset.card
           ? null
           : (button.dataset.card ?? null);
@@ -417,7 +419,7 @@ const initializeScrumPoker = () => {
     else showToast('Profile saved');
   });
 
-  timerInterval = window.setInterval(() => {
+  timerInterval = globalThis.setInterval(() => {
     if (state.timerEndsAt === null || state.timerEndsAt > Date.now()) {
       updateTimerDisplay(elements, state);
       return;
@@ -436,7 +438,7 @@ const initializeScrumPoker = () => {
       );
     }
   }, 250);
-  presenceInterval = window.setInterval(() => {
+  presenceInterval = globalThis.setInterval(() => {
     announcePresence();
     const now = Date.now();
     for (const player of activePlayers(state)) {
@@ -481,7 +483,7 @@ const initializeScrumPoker = () => {
   };
   document.addEventListener('visibilitychange', handleVisibilityChange);
   window.addEventListener('pageshow', handleResume);
-  window.addEventListener('online', handleResume);
+  globalThis.addEventListener('online', handleResume);
 
   const handleCheatCode = createDebugCheatCodeHandler({
     enable: enableDebugApi,
@@ -507,12 +509,12 @@ const initializeScrumPoker = () => {
     document.removeEventListener('keydown', handleCheatCode);
     document.removeEventListener('visibilitychange', handleVisibilityChange);
     window.removeEventListener('pageshow', handleResume);
-    window.removeEventListener('online', handleResume);
-    window.clearInterval(timerInterval);
-    window.clearInterval(presenceInterval);
-    window.clearTimeout(toastTimer);
+    globalThis.removeEventListener('online', handleResume);
+    globalThis.clearInterval(timerInterval);
+    globalThis.clearInterval(presenceInterval);
+    globalThis.clearTimeout(toastTimer);
     network.destroy();
-    delete window.scrumPoker;
+    delete globalThis.scrumPoker;
   };
 };
 

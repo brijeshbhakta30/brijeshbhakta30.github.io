@@ -13,7 +13,7 @@ const STORAGE_KEY = 'wheel-of-names:v1';
 const TAU = Math.PI * 2;
 const POINTER_ANGLE = 0;
 const IDLE_ROTATION_RADIANS_PER_SECOND = 0.18;
-const SPIN_DURATION_MS = 10000;
+const SPIN_DURATION_MS = 10_000;
 const ACCELERATION_PHASE = 0.24;
 const FAST_PHASE = 0.18;
 const SPIN_TURNS = 18;
@@ -199,7 +199,7 @@ function drawWheel(
   context.restore();
 
   const arc = TAU / entries.length;
-  entries.forEach((entry, index) => {
+  for (const [index, entry] of entries.entries()) {
     const start = rotation + index * arc;
     context.beginPath();
     context.moveTo(center, center);
@@ -212,7 +212,7 @@ function drawWheel(
     context.lineWidth = entries.length > 40 ? 0.5 : 1.5;
     context.stroke();
 
-    if (entries.length > 60) return;
+    if (entries.length > 60) continue;
     context.save();
     context.translate(center, center);
     context.rotate(start + arc / 2);
@@ -224,7 +224,7 @@ function drawWheel(
     const label = entry.length > 30 ? `${entry.slice(0, 29)}…` : entry;
     context.fillText(label, rimRadius - 22, 0, maxWidth);
     context.restore();
-  });
+  }
 
   context.save();
   context.translate(center, center);
@@ -269,6 +269,10 @@ function drawWheel(
   context.fill();
 }
 
+function prefersReducedMotion(): boolean {
+  return globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
 function initializeWheel(): void {
   disposeCurrentWheel?.();
   const root = document.querySelector<HTMLElement>('[data-wheel-tool]');
@@ -285,8 +289,6 @@ function initializeWheel(): void {
   let spinning = false;
   const controller = new AbortController();
   const options = { signal: controller.signal };
-  const prefersReducedMotion = () =>
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   const stopIdleRotation = () => {
     cancelAnimationFrame(idleFrame);

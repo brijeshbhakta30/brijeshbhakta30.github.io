@@ -63,9 +63,9 @@
 }
 
 @layer base {
-  html {
-    scroll-behavior: smooth;
-  }
+      html {
+        scroll-behavior: smooth;
+      }
 
   html::after {
     position: fixed;

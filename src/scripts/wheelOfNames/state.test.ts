@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+
 import { parseEntries, serializeEntries } from './state.ts';
 
 test('pasted quoted list entries are normalized', () => {
@@ -25,10 +26,10 @@ test('pasted quoted list entries are normalized', () => {
 });
 
 test('markdown struck-through entries are skipped', () => {
-  const entries = parseEntries(`Ada
-\\~Arthur\\~
+  const entries = parseEntries(String.raw`Ada
+\~Arthur\~
 &#x20;Finn
-&#x20;\\~Grace\\~
+&#x20;\~Grace\~
 John
 &#x20;Polly`);
 
