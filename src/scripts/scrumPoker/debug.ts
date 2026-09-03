@@ -18,6 +18,8 @@ declare global {
       showParticipants: () => void;
       showRoomState: () => void;
       showConnections: () => void;
+      showNetworkConfig: () => void;
+      testConnection: () => void;
     } | undefined
 }
 /* eslint-enable no-unused-vars */
@@ -28,6 +30,7 @@ export const enableDebugApi = ({
   getLocalPlayerId,
   getLocalVote,
   getDiagnostics,
+  getNetworkConfig,
   hasOpenConnection,
   debugBuild,
 }: {
@@ -36,6 +39,14 @@ export const enableDebugApi = ({
   getLocalPlayerId: () => string;
   getLocalVote: () => string | null;
   getDiagnostics: () => Map<string, ConnectionDiagnostics>;
+  getNetworkConfig: () => {
+    iceTransportPolicy: string;
+    iceServersCount: number;
+    iceServers: RTCIceServer[];
+    stunServers: string[];
+    hasTurnServers: boolean;
+    usingPublicTurn: boolean;
+  };
   hasOpenConnection: (player: Player) => boolean;
   debugBuild: boolean;
 }) => {
@@ -66,6 +77,14 @@ export const enableDebugApi = ({
         {
           command: 'scrumPoker.showConnections()',
           description: 'Show WebRTC state for every direct connection.',
+        },
+        {
+          command: 'scrumPoker.showNetworkConfig()',
+          description: 'Show current WebRTC/ICE network configuration.',
+        },
+        {
+          command: 'scrumPoker.testConnection()',
+          description: 'Test basic WebRTC connectivity and show diagnostics.',
         },
       ]),
     showValues: () => {
@@ -144,6 +163,133 @@ export const enableDebugApi = ({
           };
         }),
       );
+    },
+    showNetworkConfig: () => {
+      const config = getNetworkConfig();
+      console.table([
+        {
+          setting: 'ICE Transport Policy',
+          value: config.iceTransportPolicy,
+          description: 'relay = forces TURN (better for proxies), all = allows direct connections',
+        },
+        {
+          setting: 'ICE Servers Count',
+          value: config.iceServersCount,
+          description: 'Total number of STUN/TURN servers configured',
+        },
+        {
+          setting: 'STUN Servers',
+          value: config.stunServers.join(', '),
+          description: 'Servers for discovering public IP addresses',
+        },
+        {
+          setting: 'Custom TURN Servers',
+          value: config.hasTurnServers ? 'Yes' : 'No',
+          description: 'Whether custom TURN servers are configured via env vars',
+        },
+        {
+          setting: 'Public TURN Fallback',
+          value: config.usingPublicTurn ? 'Yes' : 'No',
+          description: 'Using public TURN servers for corporate proxy traversal',
+        },
+      ]);
+    },
+    testConnection: () => {
+      console.log('=== WebRTC Connection Test ===');
+      console.log('Testing basic WebRTC connectivity...');
+
+      // Test RTCPeerConnection support
+      if (!globalThis.RTCPeerConnection) {
+        console.error('❌ RTCPeerConnection not supported in this browser');
+        return;
+      }
+      console.log('✅ RTCPeerConnection is supported');
+
+      // Test ICE gathering
+      const testConfig = getNetworkConfig();
+      console.log('Current network configuration:', {
+        iceTransportPolicy: testConfig.iceTransportPolicy,
+        iceServersCount: testConfig.iceServersCount,
+        stunServers: testConfig.stunServers,
+        hasTurnServers: testConfig.hasTurnServers,
+        usingPublicTurn: testConfig.usingPublicTurn,
+      });
+
+      // Create a test peer connection
+      const testPeer = new RTCPeerConnection({
+        iceServers: testConfig.iceServers,
+        iceTransportPolicy: testConfig.iceTransportPolicy as RTCIceTransportPolicy,
+      });
+
+      console.log('✅ Test RTCPeerConnection created');
+      console.log('🔄 Starting ICE candidate gathering...');
+
+      let iceCandidates = 0;
+      let iceGatheringComplete = false;
+
+      testPeer.onicecandidate = (event) => {
+        if (event.candidate) {
+          iceCandidates++;
+          console.log(`📡 ICE candidate ${iceCandidates}:`, {
+            type: event.candidate.type,
+            protocol: event.candidate.protocol,
+            address: event.candidate.address || 'redacted',
+            port: event.candidate.port,
+          });
+        }
+      };
+
+      testPeer.onicegatheringstatechange = () => {
+        console.log(`🔄 ICE gathering state: ${testPeer.iceGatheringState}`);
+        if (testPeer.iceGatheringState === 'complete') {
+          iceGatheringComplete = true;
+          console.log('✅ ICE gathering completed');
+          console.log(`📊 Total ICE candidates gathered: ${iceCandidates}`);
+
+          // Clean up
+          setTimeout(() => {
+            testPeer.close();
+            console.log('=== Test Complete ===');
+
+            if (iceCandidates === 0) {
+              console.warn('⚠️ No ICE candidates gathered - this may indicate network/firewall issues');
+              console.warn('Consider checking:');
+              console.warn('- Corporate proxy settings');
+              console.warn('- Firewall rules blocking WebRTC');
+              console.warn('- VPN configuration');
+            } else {
+              console.log('✅ WebRTC connectivity appears functional');
+            }
+          }, 1000);
+        }
+      };
+
+      testPeer.oniceconnectionstatechange = () => {
+        console.log(`🔄 ICE connection state: ${testPeer.iceConnectionState}`);
+      };
+
+      // Trigger ICE gathering by creating a data channel
+      testPeer.createDataChannel('test');
+      console.log('✅ Test data channel created');
+
+      // Create offer to trigger ICE gathering
+      testPeer.createOffer().then(offer => {
+        return testPeer.setLocalDescription(offer);
+      }).then(() => {
+        console.log('✅ Local description set (ICE gathering should start)');
+      }).catch(error => {
+        console.error('❌ Error during connection test:', error);
+        testPeer.close();
+      });
+
+      // Timeout after 10 seconds
+      setTimeout(() => {
+        if (!iceGatheringComplete) {
+          console.warn('⚠️ ICE gathering timeout - may indicate network issues');
+          testPeer.close();
+          console.log('=== Test Timed Out ===');
+        }
+      }, 10_000);
     },
   };
   console.info(

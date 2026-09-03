@@ -56,7 +56,7 @@ const RECONNECT_DELAY_MS = 3000;
 const REGISTRY_RETRY_MS = 2000;
 
 const configuredStunUrls = (
-  import.meta.env.PUBLIC_STUN_URLS ?? 'stun:stun.l.google.com:19302'
+  import.meta.env.PUBLIC_STUN_URLS ?? 'stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302,stun:stun2.l.google.com:19302'
 )
   .split(',')
   .map((url: string) => url.trim())
@@ -67,20 +67,39 @@ const configuredTurnUrls = (import.meta.env.PUBLIC_TURN_URLS ?? '')
   .map((url: string) => url.trim())
   .filter(Boolean)
   .slice(0, 5);
+
+const publicTurnServers = [
+  'turn:turn.metered.ca:80?transport=tcp',
+  'turn:turn.metered.ca:443?transport=tcp',
+  'turn:turn.metered.ca:3478?transport=tcp',
+  'turn:openrelay.metered.ca:80',
+  'turn:openrelay.metered.ca:443',
+  'turn:openrelay.metered.ca:443?transport=tcp',
+];
+
 const iceServers: RTCIceServer[] = configuredStunUrls.length > 0
   ? [{ urls: configuredStunUrls }]
   : [];
+
 if (configuredTurnUrls.length > 0) {
   iceServers.push({
     urls: configuredTurnUrls,
     username: import.meta.env.PUBLIC_TURN_USERNAME ?? '',
     credential: import.meta.env.PUBLIC_TURN_CREDENTIAL ?? '',
   });
+} else {
+  iceServers.push({
+    urls: publicTurnServers,
+    username: 'openrelayproject',
+    credential: 'openrelayproject',
+  });
 }
 const PEER_OPTIONS = {
   debug: 0 as const,
   config: {
     iceServers,
+    // Keep direct/STUN candidates enabled by default. Use relay only with
+    // configured TURN credentials when explicitly testing or requiring relay.
     iceTransportPolicy: (import.meta.env.PUBLIC_ICE_TRANSPORT_POLICY === 'relay'
       ? 'relay'
       : 'all') as RTCIceTransportPolicy,
@@ -138,9 +157,10 @@ export const createScrumPokerNetwork = ({
   const connections = new Map<string, DataConnection>();
   const connectionParticipants = new Map<string, string>();
   const diagnostics = new Map<string, ConnectionDiagnostics>();
-  const reconnectTimers = new Map<string, ReturnType<typeof setInterval>>();
-  const connectionAttemptTimers = new Map<string, ReturnType<typeof setInterval>>();
-  let registryRetryTimer: ReturnType<typeof setInterval> | undefined;
+  const reconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  const connectionAttemptTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  let registryRetryTimer: ReturnType<typeof setTimeout> | undefined;
+  let registryAttemptTimer: ReturnType<typeof setTimeout> | undefined;
   let seenMessages = new Set<string>();
   let disposed = false;
 
@@ -199,9 +219,27 @@ export const createScrumPokerNetwork = ({
       lastChangedAt: Date.now(),
     };
     diagnostics.set(peerId, row);
-    if (DEBUG_BUILD || sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true')
+    if (DEBUG_BUILD || sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true') {
       // eslint-disable-next-line no-console
       console.debug('[Scrum Poker WebRTC]', reason, row);
+      
+      // Enhanced logging for connection failures
+      if (rtc.connectionState === 'failed' || rtc.iceConnectionState === 'failed') {
+        // eslint-disable-next-line no-console
+        console.error('[Scrum Poker WebRTC] Connection failed details:', {
+          peerId,
+          participantId: connectionParticipants.get(peerId),
+          connectionState: rtc.connectionState,
+          iceConnectionState: rtc.iceConnectionState,
+          iceGatheringState: rtc.iceGatheringState,
+          signalingState: rtc.signalingState,
+          iceTransportPolicy: PEER_OPTIONS.config.iceTransportPolicy,
+          iceServersCount: iceServers.length,
+          reason,
+          timestamp: new Date().toISOString(),
+        });
+      }
+    }
   };
 
   const updateOverallConnection = () => {
@@ -332,13 +370,16 @@ export const createScrumPokerNetwork = ({
     connection.on('error', (error) => {
       globalThis.clearTimeout(connectionAttemptTimers.get(connection.peer));
       connectionAttemptTimers.delete(connection.peer);
-      if (DEBUG_BUILD)
+      if (DEBUG_BUILD || sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true') {
         // eslint-disable-next-line no-console
-        console.debug(
-          '[Scrum Poker WebRTC] data error',
-          connection.peer,
-          error.type,
-        );
+        console.error('[Scrum Poker WebRTC] Data connection error:', {
+          peerId: connection.peer,
+          participantId: connectionParticipants.get(connection.peer),
+          errorType: error.type,
+          errorMessage: error.message,
+          timestamp: new Date().toISOString(),
+        });
+      }
       scheduleReconnect(connection.peer);
     });
     connection.on('close', () => {
@@ -435,30 +476,71 @@ export const createScrumPokerNetwork = ({
     );
   };
 
+  const releaseRegistryConnection = (
+    connection: DataConnection,
+    logMessage: string,
+  ) => {
+    if (registryConnection !== connection) return;
+    globalThis.clearTimeout(registryAttemptTimer);
+    registryAttemptTimer = undefined;
+    registryConnection = undefined;
+
+    if (DEBUG_BUILD || sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true') {
+      // eslint-disable-next-line no-console
+      console.warn('[Scrum Poker WebRTC]', logMessage);
+    }
+
+    scheduleRegistryElection();
+  };
+
   const connectToRegistry = () => {
     if (!peer || !getLocalPeerId() || registryConnection?.open || disposed)
       return;
+    globalThis.clearTimeout(registryAttemptTimer);
+    registryAttemptTimer = undefined;
     registryConnection?.close();
     const connection = peer.connect(registryPeerId(getRoomCode()), {
       reliable: true,
       metadata: { discovery: true, room: getRoomCode() },
     });
     registryConnection = connection;
-    const attemptTimeout = globalThis.setTimeout(() => {
-      if (connection.open) return;
+
+    if (DEBUG_BUILD || sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true') {
+      // eslint-disable-next-line no-console
+      console.log('[Scrum Poker WebRTC] Connecting to registry:', {
+        registryPeerId: registryPeerId(getRoomCode()),
+        localPeerId: getLocalPeerId(),
+        roomCode: getRoomCode(),
+      });
+    }
+
+    registryAttemptTimer = globalThis.setTimeout(() => {
+      if (registryConnection !== connection || connection.open) return;
+      releaseRegistryConnection(
+        connection,
+        'Registry connection timeout - scheduling election',
+      );
       connection.close();
-      scheduleRegistryElection();
     }, 15_000);
     connection.on('open', () => {
-      globalThis.clearTimeout(attemptTimeout);
+      if (registryConnection !== connection) return;
+      globalThis.clearTimeout(registryAttemptTimer);
+      registryAttemptTimer = undefined;
       globalThis.clearTimeout(registryRetryTimer);
       registryRetryTimer = undefined;
+
+      if (DEBUG_BUILD || sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true') {
+        // eslint-disable-next-line no-console
+        console.log('[Scrum Poker WebRTC] Registry connection established');
+      }
+
       sendOpen(connection, {
         type: 'discover',
         participant: getIdentity(),
       } satisfies RegistryMessage);
     });
     connection.on('data', (raw) => {
+      if (registryConnection !== connection) return;
       const message = raw as RegistryMessage;
       if (message.type === 'welcome') {
         mergeState(message.state);
@@ -469,12 +551,24 @@ export const createScrumPokerNetwork = ({
       } else if (message.type === 'directory') ensureMesh(message.peerIds);
     });
     const lostRegistry = () => {
-      globalThis.clearTimeout(attemptTimeout);
-      if (registryConnection === connection) registryConnection = undefined;
-      scheduleRegistryElection();
+      releaseRegistryConnection(
+        connection,
+        'Registry connection lost - scheduling election',
+      );
     };
     connection.on('close', lostRegistry);
-    connection.on('error', lostRegistry);
+    connection.on('error', (error) => {
+      if (DEBUG_BUILD || sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true') {
+        // eslint-disable-next-line no-console
+        console.error('[Scrum Poker WebRTC] Registry connection error:', {
+          errorType: error.type,
+          errorMessage: error.message,
+          registryPeerId: registryPeerId(getRoomCode()),
+          timestamp: new Date().toISOString(),
+        });
+      }
+      lostRegistry();
+    });
   };
 
   function claimRegistry() {
@@ -484,13 +578,25 @@ export const createScrumPokerNetwork = ({
     const candidate = new Peer(registryPeerId(roomCode), PEER_OPTIONS);
     registryPeer = candidate;
     candidate.on('open', () => {
-      registryConnection?.close();
+      const connection = registryConnection;
       registryConnection = undefined;
+      globalThis.clearTimeout(registryAttemptTimer);
+      registryAttemptTimer = undefined;
+      connection?.close();
       candidate.on('connection', registerRegistryClient);
       broadcastDirectory();
       announceJoin();
       restoreLocalVote();
       updateOverallConnection();
+
+      if (DEBUG_BUILD || sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true') {
+        // eslint-disable-next-line no-console
+        console.log('[Scrum Poker WebRTC] Registry claimed:', {
+          registryPeerId: registryPeerId(roomCode),
+          localPeerId: getLocalPeerId(),
+          roomCode,
+        });
+      }
     });
     candidate.on('error', (error) => {
       if (registryPeer === candidate) registryPeer = undefined;
@@ -526,6 +632,18 @@ export const createScrumPokerNetwork = ({
     destroy();
     disposed = false;
     setConnection('Joining peer mesh', 'connecting');
+
+    if (DEBUG_BUILD || sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true') {
+      // eslint-disable-next-line no-console
+      console.log('[Scrum Poker WebRTC] Starting peer connection with config:', {
+        iceTransportPolicy: PEER_OPTIONS.config.iceTransportPolicy,
+        iceServersCount: iceServers.length,
+        stunServers: configuredStunUrls,
+        hasTurnServers: configuredTurnUrls.length > 0,
+        usingPublicTurn: configuredTurnUrls.length === 0,
+      });
+    }
+
     const roomPeer = new Peer(PEER_OPTIONS);
     peer = roomPeer;
     roomPeer.on('open', (id) => {
@@ -540,8 +658,29 @@ export const createScrumPokerNetwork = ({
     });
     roomPeer.on('error', (error) => {
       if (peer !== roomPeer || roomPeer.destroyed) return;
+
+      if (DEBUG_BUILD || sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true') {
+        // eslint-disable-next-line no-console
+        console.error('[Scrum Poker WebRTC] Peer error:', {
+          type: error.type,
+          message: error.message,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
       if (error.type === 'peer-unavailable') {
-        scheduleRegistryElection();
+        const connection = registryConnection;
+        if (
+          connection &&
+          !connection.open &&
+          error.message.includes(registryPeerId(getRoomCode()))
+        ) {
+          releaseRegistryConnection(
+            connection,
+            'Registry peer unavailable - scheduling election',
+          );
+          connection.close();
+        } else scheduleRegistryElection();
         return;
       }
       if (error.type === 'webrtc') {
@@ -556,6 +695,12 @@ export const createScrumPokerNetwork = ({
       if (peer !== roomPeer || disposed || roomPeer.destroyed) return;
       setConnection('Reconnecting…', 'connecting');
       if (!roomPeer.disconnected) return;
+
+      if (DEBUG_BUILD || sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true') {
+        // eslint-disable-next-line no-console
+        console.warn('[Scrum Poker WebRTC] Peer disconnected, attempting reconnect');
+      }
+
       try {
         roomPeer.reconnect();
       } catch (error) {
@@ -570,6 +715,8 @@ export const createScrumPokerNetwork = ({
     disposed = true;
     globalThis.clearTimeout(registryRetryTimer);
     registryRetryTimer = undefined;
+    globalThis.clearTimeout(registryAttemptTimer);
+    registryAttemptTimer = undefined;
     for (const timer of reconnectTimers.values()) globalThis.clearTimeout(timer);
     reconnectTimers.clear();
     for (const timer of connectionAttemptTimers.values())
@@ -617,6 +764,14 @@ export const createScrumPokerNetwork = ({
     },
     diagnostics: () => diagnostics,
     heartbeatIntervalMs: HEARTBEAT_INTERVAL_MS,
+    getNetworkConfig: () => ({
+      iceTransportPolicy: PEER_OPTIONS.config.iceTransportPolicy,
+      iceServersCount: iceServers.length,
+      iceServers,
+      stunServers: configuredStunUrls,
+      hasTurnServers: configuredTurnUrls.length > 0,
+      usingPublicTurn: configuredTurnUrls.length === 0,
+    }),
   };
 };
 
