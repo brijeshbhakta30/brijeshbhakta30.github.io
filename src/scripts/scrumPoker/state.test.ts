@@ -39,6 +39,19 @@ const joined = (): RoomState =>
     }),
   );
 
+const withMockedNow = <T>(now: number, callback: () => T) => {
+  const descriptor = Object.getOwnPropertyDescriptor(Date, 'now');
+  Object.defineProperty(Date, 'now', {
+    configurable: true,
+    value: () => now,
+  });
+  try {
+    return callback();
+  } finally {
+    if (descriptor) Object.defineProperty(Date, 'now', descriptor);
+  }
+};
+
 test('random IDs work when crypto.randomUUID is unavailable', () => {
   const cryptoDescriptor = Object.getOwnPropertyDescriptor(
     globalThis.crypto,
@@ -208,4 +221,48 @@ test('concurrent configuration and round actions merge independently', () => {
   assert.equal(right.round, 2);
   assert.equal(left.allowVoteChangesAfterReveal, false);
   assert.equal(right.allowVoteChangesAfterReveal, false);
+});
+
+test('timer actions preserve remaining time across clock skew', () => {
+  const state = joined();
+  const next = withMockedNow(206_000, () =>
+    applyRoomAction(
+      state,
+      {
+        ...action('timer', 2, 'a', {
+          roundId: state.roundId,
+          duration: 30,
+          endsAt: 130_000,
+          autoReveal: true,
+        }),
+        sentAt: 100_000,
+      },
+    ),
+  );
+
+  assert.equal(next.timerDuration, 30);
+  assert.equal(next.timerEndsAt, 236_000);
+});
+
+test('active timers in snapshots preserve remaining time across clock skew', () => {
+  const local = joined();
+  const remote = {
+    ...local,
+    timerEndsAt: 130_000,
+    timerDuration: 30,
+    autoReveal: true,
+    clocks: {
+      ...local.clocks,
+      timer: { counter: 2, id: '002-a' },
+    },
+    version: 2,
+  };
+
+  const merged = withMockedNow(206_000, () =>
+    mergeRoomState(local, remote, 100_000),
+  );
+
+  assert.equal(merged.timerDuration, 30);
+  assert.equal(merged.timerEndsAt, 236_000);
+  assert.equal(merged.autoReveal, true);
 });

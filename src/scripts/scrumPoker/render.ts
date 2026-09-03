@@ -50,7 +50,10 @@ export const updateTimerDisplay = (
   const secondsLeft =
     state.timerEndsAt === null
       ? state.timerDuration
-      : Math.max(0, Math.ceil((state.timerEndsAt - Date.now()) / 1000));
+      : Math.min(
+          state.timerDuration,
+          Math.max(0, Math.ceil((state.timerEndsAt - Date.now()) / 1000)),
+        );
   elements.timerDisplay.textContent = `${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, '0')}`;
   const running = state.timerEndsAt !== null;
   elements.timerDisplay.classList.toggle('is-running', running);
@@ -137,12 +140,33 @@ const renderStatistics = (
     .join('');
 };
 
+const queueResultFocus = (
+  elements: ScrumPokerElements,
+  firstRevealRender: boolean,
+  focusResultAfterReveal: boolean,
+) => {
+  if (!firstRevealRender || !focusResultAfterReveal)
+    return focusResultAfterReveal;
+  requestAnimationFrame(() => {
+    const bounds = elements.statistics.getBoundingClientRect();
+    if (bounds.top >= 0 && bounds.bottom <= window.innerHeight) return;
+    elements.statistics.scrollIntoView({
+      behavior: matchMedia('(prefers-reduced-motion: reduce)').matches
+        ? 'auto'
+        : 'smooth',
+      block: 'center',
+    });
+  });
+  return false;
+};
+
 export const renderScrumPoker = ({
   elements,
   state,
   localPlayerId,
   localVote,
   previouslyRevealed,
+  revealAnimationActive,
   focusResultAfterReveal,
   hasOpenConnection,
 }: {
@@ -151,6 +175,7 @@ export const renderScrumPoker = ({
   localPlayerId: string;
   localVote: string | null;
   previouslyRevealed: boolean;
+  revealAnimationActive: boolean;
   focusResultAfterReveal: boolean;
   hasOpenConnection: (player: Player) => boolean;
 }) => {
@@ -159,7 +184,8 @@ export const renderScrumPoker = ({
     (player) => player.voteRoundId === state.roundId && player.hasVoted,
   ).length;
   const total = players.length;
-  const animateReveal = state.revealed && !previouslyRevealed;
+  const animateReveal = state.revealed && revealAnimationActive;
+  const firstRevealRender = state.revealed && !previouslyRevealed;
   const playerPresence = (player: Player): PresenceState =>
     presenceFor(player, Date.now(), hasOpenConnection(player));
   const compareRevealedPlayers = (first: Player, second: Player) => {
@@ -188,13 +214,16 @@ export const renderScrumPoker = ({
       ? 'Everyone has voted'
       : `${voted} of ${total} voted`);
   elements.timerInput.value = String(state.timerDuration);
+  elements.timerInput.disabled = state.revealed;
   elements.autoRevealInput.checked = state.autoReveal;
+  elements.autoRevealInput.disabled = state.revealed;
   elements.allowVoteChangesInput.checked = state.allowVoteChangesAfterReveal;
   elements.startTimerButton.textContent =
     state.timerEndsAt === null ? 'Start timer' : 'Restart timer';
+  elements.startTimerButton.disabled = state.revealed;
   elements.stopTimerButton.classList.toggle(
     'hidden',
-    state.timerEndsAt === null,
+    state.timerEndsAt === null || state.revealed,
   );
   elements.revealButton.disabled = state.revealed || voted === 0;
   elements.revealButton.textContent = state.revealed
@@ -238,23 +267,12 @@ export const renderScrumPoker = ({
   renderStatistics(elements, state, players, animateReveal);
   updateTimerDisplay(elements, state);
 
-  let nextFocusResultAfterReveal = focusResultAfterReveal;
-  if (animateReveal && focusResultAfterReveal) {
-    nextFocusResultAfterReveal = false;
-    requestAnimationFrame(() => {
-      const bounds = elements.statistics.getBoundingClientRect();
-      if (bounds.top >= 0 && bounds.bottom <= window.innerHeight) return;
-      elements.statistics.scrollIntoView({
-        behavior: matchMedia('(prefers-reduced-motion: reduce)').matches
-          ? 'auto'
-          : 'smooth',
-        block: 'center',
-      });
-    });
-  }
-
   return {
     previouslyRevealed: state.revealed,
-    focusResultAfterReveal: nextFocusResultAfterReveal,
+    focusResultAfterReveal: queueResultFocus(
+      elements,
+      firstRevealRender,
+      focusResultAfterReveal,
+    ),
   };
 };

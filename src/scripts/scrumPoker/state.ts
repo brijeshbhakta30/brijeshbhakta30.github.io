@@ -80,9 +80,29 @@ type Action<T extends string, P> = {
   id: string;
   actorId: string;
   counter: number;
+  sentAt?: number;
   type: T;
   payload: P;
 };
+
+const localTimerEndsAt = (
+  endsAt: number | null,
+  sentAt: number | undefined,
+) => {
+  if (endsAt === null || sentAt === undefined) return endsAt;
+  return Date.now() + Math.max(0, endsAt - sentAt);
+};
+
+export const localizeTimerState = (
+  state: RoomState,
+  sentAt: number | undefined,
+): RoomState =>
+  state.timerEndsAt === null || sentAt === undefined
+    ? state
+    : {
+        ...state,
+        timerEndsAt: localTimerEndsAt(state.timerEndsAt, sentAt),
+      };
 
 const ZERO_CLOCK: Clock = { counter: 0, id: '' };
 
@@ -319,7 +339,7 @@ const applyTimerAction = (
   return {
     ...state,
     timerDuration: normalizeTimerDuration(action.payload.duration),
-    timerEndsAt: action.payload.endsAt,
+    timerEndsAt: localTimerEndsAt(action.payload.endsAt, action.sentAt),
     autoReveal: action.payload.autoReveal,
     clocks: { ...state.clocks, timer: clock },
   };
@@ -435,8 +455,9 @@ const mergePlayer = (local: Player | undefined, remote: Player): Player => {
 export const mergeRoomState = (
   local: RoomState,
   remoteInput: RoomState,
+  sentAt?: number,
 ): RoomState => {
-  const remote = migrateRoomState(remoteInput);
+  const remote = localizeTimerState(migrateRoomState(remoteInput), sentAt);
   const remoteRoundWins = newer(remote.clocks.round, local.clocks.round);
   let merged = { ...local };
   if (remoteRoundWins) {

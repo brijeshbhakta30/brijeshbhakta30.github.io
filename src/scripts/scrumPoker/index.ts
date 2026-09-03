@@ -63,6 +63,7 @@ const initializeScrumPoker = () => {
   let focusResultAfterReveal = false;
   let pendingRoomJoin = '';
   let lastJoinAnnouncedAt = 0;
+  let revealAnimationUntil = 0;
   let network: ScrumPokerNetwork;
 
   const setState = (nextState: RoomState) => {
@@ -107,6 +108,7 @@ const initializeScrumPoker = () => {
       localPlayerId,
       localVote,
       previouslyRevealed,
+      revealAnimationActive: Date.now() < revealAnimationUntil,
       focusResultAfterReveal,
       hasOpenConnection: (player) => network.hasOpenConnection(player),
     });
@@ -123,6 +125,7 @@ const initializeScrumPoker = () => {
       id: `${String(logicalClock).padStart(10, '0')}-${localPlayerId}-${makeRandomId()}`,
       actorId: localPlayerId,
       counter: logicalClock,
+      sentAt: Date.now(),
       type,
       payload,
     } as Extract<RoomAction, { type: T }>;
@@ -137,14 +140,17 @@ const initializeScrumPoker = () => {
     const wasRevealed = state.revealed;
     const previousRoundId = state.roundId;
     state = applyRoomAction(state, action);
+    const revealStarted = !wasRevealed && state.revealed;
+    if (revealStarted) revealAnimationUntil = Date.now() + 450;
     if (previousRoundId !== state.roundId) {
       localVote = null;
+      revealAnimationUntil = 0;
       persistLocalVote();
     }
-    render();
     if (shouldRelay) network.relay({ type: 'action', action });
     // eslint-disable-next-line @typescript-eslint/no-use-before-define
-    if (!wasRevealed && state.revealed) publishLocalVote();
+    if (revealStarted && publishLocalVote()) return;
+    render();
   };
 
   const dispatchAction = (action: RoomAction) => processAction(action, true);
@@ -152,7 +158,7 @@ const initializeScrumPoker = () => {
   const publishLocalVote = () => {
     const player = state.players.find((item) => item.id === localPlayerId);
     if (!player || player.voteRoundId !== state.roundId || !player.hasVoted)
-      return;
+      return false;
     dispatchAction(
       makeAction('vote', {
         playerId: localPlayerId,
@@ -161,6 +167,7 @@ const initializeScrumPoker = () => {
         vote: localVote,
       }),
     );
+    return true;
   };
 
   const announceJoin = () => {
@@ -266,6 +273,7 @@ const initializeScrumPoker = () => {
     localVote = null;
     previouslyRevealed = false;
     focusResultAfterReveal = false;
+    revealAnimationUntil = 0;
     elements.setup.classList.remove('hidden');
     elements.roomView.classList.add('hidden');
     updateRoomUrl();
@@ -279,6 +287,7 @@ const initializeScrumPoker = () => {
     state = freshRoomState();
     logicalClock = 0;
     lastJoinAnnouncedAt = 0;
+    revealAnimationUntil = 0;
     localVote = null;
     enterRoom();
     network.start();
@@ -292,6 +301,7 @@ const initializeScrumPoker = () => {
   });
 
   const configureTimer = (start: boolean) => {
+    if (state.revealed) return;
     const settings = timerSettings();
     dispatchAction(
       makeAction('timer', {
@@ -377,6 +387,7 @@ const initializeScrumPoker = () => {
     configureTimer(true),
   );
   elements.stopTimerButton.addEventListener('click', () => {
+    if (state.revealed) return;
     const settings = timerSettings();
     dispatchAction(
       makeAction('timer', {

@@ -15,8 +15,13 @@ import {
 export type ParticipantIdentity = { id: string; peerId: string; name: string };
 
 type DirectMessage =
-  | { type: 'hello'; participant: ParticipantIdentity; state: RoomState }
-  | { type: 'snapshot'; state: RoomState }
+  | {
+      type: 'hello';
+      participant: ParticipantIdentity;
+      state: RoomState;
+      sentAt: number;
+    }
+  | { type: 'snapshot'; state: RoomState; sentAt: number }
   | { type: 'ping'; sentAt: number }
   | { type: 'pong'; sentAt: number };
 
@@ -38,7 +43,7 @@ type Envelope = {
 
 type RegistryMessage =
   | { type: 'discover'; participant: ParticipantIdentity }
-  | { type: 'welcome'; peerIds: string[]; state: RoomState }
+  | { type: 'welcome'; peerIds: string[]; state: RoomState; sentAt: number }
   | { type: 'directory'; peerIds: string[] };
 
 export type ConnectionDiagnostics = {
@@ -189,8 +194,8 @@ export const createScrumPokerNetwork = ({
     broadcastRaw(envelope);
   };
 
-  const mergeState = (remoteState: RoomState) => {
-    const merged = mergeRoomState(getState(), remoteState);
+  const mergeState = (remoteState: RoomState, sentAt?: number) => {
+    const merged = mergeRoomState(getState(), remoteState, sentAt);
     setState(merged);
   };
 
@@ -309,14 +314,14 @@ export const createScrumPokerNetwork = ({
     }
     if (message.type === 'pong') return;
     if (message.type === 'snapshot') {
-      mergeState(message.state);
+      mergeState(message.state, message.sentAt);
       render();
       return;
     }
     connectionParticipants.set(connection.peer, message.participant.id);
     const diagnostic = diagnostics.get(connection.peer);
     if (diagnostic) diagnostic.participantId = message.participant.id;
-    mergeState(message.state);
+    mergeState(message.state, message.sentAt);
     const state = getState();
     const player = state.players.find(
       (item) => item.id === message.participant.id,
@@ -326,7 +331,11 @@ export const createScrumPokerNetwork = ({
       player.lastSeenAt = Date.now();
       player.pageHidden = false;
     }
-    sendOpen(connection, { type: 'snapshot', state } satisfies DirectMessage);
+    sendOpen(connection, {
+      type: 'snapshot',
+      state,
+      sentAt: Date.now(),
+    } satisfies DirectMessage);
     announceJoin();
     restoreLocalVote();
     render();
@@ -361,6 +370,7 @@ export const createScrumPokerNetwork = ({
         type: 'hello',
         participant: getIdentity(),
         state: getState(),
+        sentAt: Date.now(),
       } satisfies DirectMessage);
       updateOverallConnection();
     });
@@ -452,6 +462,7 @@ export const createScrumPokerNetwork = ({
         type: 'welcome',
         peerIds: registryDirectory(),
         state: getState(),
+        sentAt: Date.now(),
       } satisfies RegistryMessage);
       broadcastDirectory();
     });
@@ -543,7 +554,7 @@ export const createScrumPokerNetwork = ({
       if (registryConnection !== connection) return;
       const message = raw as RegistryMessage;
       if (message.type === 'welcome') {
-        mergeState(message.state);
+        mergeState(message.state, message.sentAt);
         ensureMesh(message.peerIds);
         announceJoin();
         restoreLocalVote();

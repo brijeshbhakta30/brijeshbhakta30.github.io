@@ -88,6 +88,7 @@
 	min-width: 4.5rem;
 	border-bottom: 1px solid transparent;
 	transform-origin: center;
+	transition: font-size 160ms ease;
 }
 
 .scrum-timer.is-running {
@@ -97,8 +98,17 @@
 }
 
 .scrum-timer.is-urgent {
+	min-width: 5.2rem;
 	border-color: var(--site-accent);
+	font-size: 1.35rem;
 	animation-duration: 600ms;
+}
+
+#timer-duration:disabled,
+#timer-auto-reveal:disabled,
+#start-timer:disabled {
+	cursor: not-allowed;
+	opacity: 0.42;
 }
 
 .scrum-players {
