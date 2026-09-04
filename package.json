@@ -16,6 +16,7 @@
 		"test": "node --test src/**/*.test.ts",
 		"lint": "eslint src ./*.js ./*.mjs && prettier --check src",
 		"lint:fix": "eslint src ./*.js ./*.mjs --fix && prettier --write src",
+		"format": "prettier --write src",
 		"preview": "ASTRO_TELEMETRY_DISABLED=1 astro preview",
 		"lint-staged": "lint-staged",
 		"commitlint": "commitlint",

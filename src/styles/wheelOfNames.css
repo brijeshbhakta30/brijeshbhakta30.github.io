@@ -171,8 +171,7 @@ html[data-theme="dark"] .wheel-theme-dark {
 	top: 50%;
 	right: -0.25rem;
 	transform: translateX(var(--wheel-pointer-shift))
-		translateY(calc(-50% + var(--wheel-pointer-offset)))
-		rotate(var(--wheel-pointer-tilt));
+		translateY(calc(-50% + var(--wheel-pointer-offset))) rotate(var(--wheel-pointer-tilt));
 	transform-origin: 65% 50%;
 	color: var(--wheel-text);
 	font-size: clamp(2rem, 5vw, 3.5rem);

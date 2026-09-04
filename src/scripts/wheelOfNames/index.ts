@@ -1,7 +1,6 @@
 import {
   normalizeAngle,
   POINTER_RESTING_ANGLE,
-  pointerAngleForOffset,
   TAU,
   winningIndexForRotation,
 } from './geometry';
@@ -19,11 +18,7 @@ import {
 const STORAGE_KEY = 'wheel-of-names:v1';
 const IDLE_ROTATION_RADIANS_PER_SECOND = 0.18;
 const WHEEL_STOP_RADIANS_PER_SECOND = 0.012;
-const POINTER_SETTLE_OFFSET_PIXELS = 0.06;
-const POINTER_SETTLE_VELOCITY_PIXELS_PER_SECOND = 0.2;
-const POINTER_MAX_TRAVEL_PIXELS = 26;
-const POINTER_RETURN_DAMPING = 19;
-const POINTER_RETURN_STIFFNESS = 135;
+const POINTER_MAX_TRAVEL_PIXELS = 170;
 const SPIN_RANDOM_SCALE = 1_000_000;
 const WHEEL_COLORS = [
   { fill: '#2f80a7', text: '#ffffff' },
@@ -226,40 +221,34 @@ function wheelRadiusFor(canvas: HTMLCanvasElement): number {
   return Math.max(1, size / 2 - 8);
 }
 
-function pointerMaxTravelFor(wheelRadiusPixels: number): number {
-  return Math.min(
-    POINTER_MAX_TRAVEL_PIXELS,
-    Math.max(12, wheelRadiusPixels * 0.06),
-  );
+function pointerMaxArcTravelFor(): number {
+  return POINTER_MAX_TRAVEL_PIXELS;
 }
 
-function pointerOffsetFor(
+function pointerAngleOffsetFor(
   phase: number,
   angularVelocity: number,
   wheelRadiusPixels: number,
 ): number {
   if (angularVelocity <= 0) return 0;
 
-  const speedRatio = Math.min(1, angularVelocity / 34);
-  const maxTravel = pointerMaxTravelFor(wheelRadiusPixels);
+  const arcTravelPixels = Math.sin(phase) * pointerMaxArcTravelFor();
 
-  return Math.sin(phase) * maxTravel * speedRatio;
+  return arcTravelPixels / wheelRadiusPixels;
 }
 
 function applyPointerTransform(
   elements: Elements,
-  offsetPixels: number,
-  velocityPixelsPerSecond: number,
+  angleOffset: number,
+  wheelRadiusPixels: number,
 ): void {
-  const shift = Math.min(5, Math.abs(offsetPixels) * 0.18) * -1;
-  const tilt = Math.max(
-    -11,
-    Math.min(11, offsetPixels * -0.45 + velocityPixelsPerSecond * 0.012),
-  );
+  const shift = wheelRadiusPixels * (Math.cos(angleOffset) - 1);
+  const offset = wheelRadiusPixels * Math.sin(angleOffset);
+  const tilt = (angleOffset * 180) / Math.PI;
 
   elements.pointer.style.setProperty(
     '--wheel-pointer-offset',
-    `${offsetPixels.toFixed(2)}px`,
+    `${offset.toFixed(2)}px`,
   );
   elements.pointer.style.setProperty(
     '--wheel-pointer-shift',
@@ -417,9 +406,8 @@ function initializeWheel(): void {
   let spinLastDraw = 0;
   let idleFrame = 0;
   let idleLastDraw = 0;
-  let pointerOffsetPixels = 0;
+  let pointerAngleOffset = 0;
   let pointerPhase = 0;
-  let pointerVelocityPixelsPerSecond = 0;
   let spinning = false;
   const controller = new AbortController();
   const options = { signal: controller.signal };
@@ -485,13 +473,12 @@ function initializeWheel(): void {
   };
 
   const resetPointer = () => {
-    pointerOffsetPixels = 0;
+    pointerAngleOffset = 0;
     pointerPhase = 0;
-    pointerVelocityPixelsPerSecond = 0;
     applyPointerTransform(
       elements,
-      pointerOffsetPixels,
-      pointerVelocityPixelsPerSecond,
+      pointerAngleOffset,
+      wheelRadiusFor(elements.canvas),
     );
   };
 
@@ -500,59 +487,29 @@ function initializeWheel(): void {
     angularVelocity: number,
   ): boolean => {
     const wheelRadiusPixels = wheelRadiusFor(elements.canvas);
-    const maxOffset = pointerMaxTravelFor(wheelRadiusPixels);
 
     if (angularVelocity > 0) {
-      const previousOffset = pointerOffsetPixels;
       pointerPhase = normalizeAngle(
         pointerPhase - angularVelocity * elapsedSeconds,
       );
-      pointerOffsetPixels = pointerOffsetFor(
+      pointerAngleOffset = pointerAngleOffsetFor(
         pointerPhase,
         angularVelocity,
         wheelRadiusPixels,
       );
-      pointerVelocityPixelsPerSecond =
-        (pointerOffsetPixels - previousOffset) /
-        Math.max(0.001, elapsedSeconds);
 
       applyPointerTransform(
         elements,
-        pointerOffsetPixels,
-        pointerVelocityPixelsPerSecond,
+        pointerAngleOffset,
+        wheelRadiusPixels,
       );
 
       return false;
     }
 
-    const pointerAcceleration =
-      -pointerOffsetPixels * POINTER_RETURN_STIFFNESS -
-      pointerVelocityPixelsPerSecond * POINTER_RETURN_DAMPING;
+    applyPointerTransform(elements, pointerAngleOffset, wheelRadiusPixels);
 
-    pointerVelocityPixelsPerSecond += pointerAcceleration * elapsedSeconds;
-    pointerOffsetPixels += pointerVelocityPixelsPerSecond * elapsedSeconds;
-    pointerOffsetPixels = Math.max(
-      -maxOffset,
-      Math.min(maxOffset, pointerOffsetPixels),
-    );
-
-    if (
-      angularVelocity === 0 &&
-      Math.abs(pointerOffsetPixels) < POINTER_SETTLE_OFFSET_PIXELS &&
-      Math.abs(pointerVelocityPixelsPerSecond) <
-        POINTER_SETTLE_VELOCITY_PIXELS_PER_SECOND
-    ) {
-      resetPointer();
-      return true;
-    }
-
-    applyPointerTransform(
-      elements,
-      pointerOffsetPixels,
-      pointerVelocityPixelsPerSecond,
-    );
-
-    return false;
+    return true;
   };
 
   const setEntries = (entries: string[]) => {
@@ -570,9 +527,8 @@ function initializeWheel(): void {
   };
 
   const finishSpin = () => {
-    const pointerAngle = pointerAngleForOffset(
-      pointerOffsetPixels,
-      wheelRadiusFor(elements.canvas),
+    const pointerAngle = normalizeAngle(
+      POINTER_RESTING_ANGLE + pointerAngleOffset,
     );
     const selectedIndex = winningIndexForRotation(
       state.entries.length,
