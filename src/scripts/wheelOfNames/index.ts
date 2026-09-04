@@ -1,4 +1,11 @@
 import {
+  normalizeAngle,
+  POINTER_RESTING_ANGLE,
+  pointerAngleForOffset,
+  TAU,
+  winningIndexForRotation,
+} from './geometry';
+import {
   DEFAULT_ENTRIES,
   parseEntries,
   removeEntryAt,
@@ -10,14 +17,14 @@ import {
 } from './state';
 
 const STORAGE_KEY = 'wheel-of-names:v1';
-const TAU = Math.PI * 2;
-const POINTER_ANGLE = 0;
 const IDLE_ROTATION_RADIANS_PER_SECOND = 0.18;
-const SPIN_DURATION_MS = 10_000;
-const ACCELERATION_PHASE = 0.24;
-const FAST_PHASE = 0.18;
-const SPIN_TURNS = 18;
-const REDUCED_MOTION_SPIN_TURNS = 2;
+const WHEEL_STOP_RADIANS_PER_SECOND = 0.012;
+const POINTER_SETTLE_OFFSET_PIXELS = 0.06;
+const POINTER_SETTLE_VELOCITY_PIXELS_PER_SECOND = 0.2;
+const POINTER_MAX_TRAVEL_PIXELS = 26;
+const POINTER_RETURN_DAMPING = 19;
+const POINTER_RETURN_STIFFNESS = 135;
+const SPIN_RANDOM_SCALE = 1_000_000;
 const WHEEL_COLORS = [
   { fill: '#2f80a7', text: '#ffffff' },
   { fill: '#d44d5c', text: '#ffffff' },
@@ -30,6 +37,18 @@ const WHEEL_COLORS = [
 ];
 
 type Elements = ReturnType<typeof queryElements>;
+type SpinPhase = 'accelerating' | 'cruising' | 'coasting' | 'stopped';
+type SpinMotion = {
+  acceleration: number;
+  accelerationDuration: number;
+  angularVelocity: number;
+  cruiseDuration: number;
+  drag: number;
+  elapsedInPhase: number;
+  friction: number;
+  maxAngularVelocity: number;
+  phase: SpinPhase;
+};
 
 let disposeCurrentWheel: (() => void) | undefined;
 
@@ -50,6 +69,7 @@ function queryElements(root: HTMLElement) {
     shuffleButton: required<HTMLButtonElement>('[data-shuffle]'),
     sortButton: required<HTMLButtonElement>('[data-sort]'),
     clearButton: required<HTMLButtonElement>('[data-clear]'),
+    pointer: required<HTMLElement>('.wheel-pointer'),
     removeWinner: required<HTMLInputElement>('[data-remove-winner]'),
     dialog: required<HTMLDialogElement>('[data-winner-dialog]'),
     winner: required<HTMLElement>('[data-winner-name]'),
@@ -116,30 +136,139 @@ function insertParsedPaste(
   return { caret: caretValue.length, entries };
 }
 
-function spinProgressFor(elapsed: number, duration: number): number {
-  const time = Math.min(duration, elapsed);
-  const accelerationDuration = duration * ACCELERATION_PHASE;
-  const fastDuration = duration * FAST_PHASE;
-  const slowdownDuration = duration - accelerationDuration - fastDuration;
-  const maxVelocity =
-    1 / (accelerationDuration / 2 + fastDuration + slowdownDuration / 2);
+function randomUnit(): number {
+  return secureRandomInt(SPIN_RANDOM_SCALE) / SPIN_RANDOM_SCALE;
+}
 
-  if (time < accelerationDuration) {
-    return (maxVelocity * time * time) / (2 * accelerationDuration);
+function randomBetween(minimum: number, maximum: number): number {
+  return minimum + (maximum - minimum) * randomUnit();
+}
+
+function createSpinMotion(reducedMotion: boolean): SpinMotion {
+  const initialVelocity = reducedMotion
+    ? randomBetween(0.55, 1.1)
+    : randomBetween(1.2, 2.4);
+  const maxAngularVelocity = reducedMotion
+    ? randomBetween(7, 11)
+    : randomBetween(36, 50);
+  const accelerationDuration = reducedMotion
+    ? randomBetween(0.35, 0.55)
+    : randomBetween(0.75, 1.15);
+
+  return {
+    acceleration:
+      (maxAngularVelocity - initialVelocity) / accelerationDuration,
+    accelerationDuration,
+    angularVelocity: initialVelocity,
+    cruiseDuration: reducedMotion
+      ? randomBetween(0.05, 0.16)
+      : randomBetween(0.28, 0.85),
+    drag: reducedMotion ? randomBetween(1.05, 1.45) : randomBetween(0.36, 0.54),
+    elapsedInPhase: 0,
+    friction: reducedMotion
+      ? randomBetween(1.8, 2.6)
+      : randomBetween(0.42, 0.7),
+    maxAngularVelocity,
+    phase: 'accelerating',
+  };
+}
+
+function advanceSpinMotion(motion: SpinMotion, elapsedSeconds: number): boolean {
+  if (motion.phase === 'stopped') return true;
+
+  motion.elapsedInPhase += elapsedSeconds;
+
+  if (motion.phase === 'accelerating') {
+    motion.angularVelocity = Math.min(
+      motion.maxAngularVelocity,
+      motion.angularVelocity + motion.acceleration * elapsedSeconds,
+    );
+
+    if (motion.elapsedInPhase >= motion.accelerationDuration) {
+      motion.phase = 'cruising';
+      motion.elapsedInPhase = 0;
+      motion.angularVelocity = motion.maxAngularVelocity;
+    }
+
+    return false;
   }
 
-  const accelerationDistance = (maxVelocity * accelerationDuration) / 2;
-  if (time < accelerationDuration + fastDuration) {
-    return accelerationDistance + maxVelocity * (time - accelerationDuration);
+  if (motion.phase === 'cruising') {
+    motion.angularVelocity = motion.maxAngularVelocity;
+
+    if (motion.elapsedInPhase >= motion.cruiseDuration) {
+      motion.phase = 'coasting';
+      motion.elapsedInPhase = 0;
+    }
+
+    return false;
   }
 
-  const slowdownTime = time - accelerationDuration - fastDuration;
-  const fastDistance = maxVelocity * fastDuration;
-  const slowdownDistance =
-    maxVelocity * slowdownTime -
-    (maxVelocity * slowdownTime * slowdownTime) / (2 * slowdownDuration);
+  const deceleration =
+    motion.friction + motion.drag * Math.max(0, motion.angularVelocity);
+  motion.angularVelocity = Math.max(
+    0,
+    motion.angularVelocity - deceleration * elapsedSeconds,
+  );
 
-  return Math.min(1, accelerationDistance + fastDistance + slowdownDistance);
+  if (motion.angularVelocity <= WHEEL_STOP_RADIANS_PER_SECOND) {
+    motion.angularVelocity = 0;
+    motion.phase = 'stopped';
+    return true;
+  }
+
+  return false;
+}
+
+function wheelRadiusFor(canvas: HTMLCanvasElement): number {
+  const rect = canvas.getBoundingClientRect();
+  const size = Math.max(1, Math.min(rect.width, rect.height));
+  return Math.max(1, size / 2 - 8);
+}
+
+function pointerMaxTravelFor(wheelRadiusPixels: number): number {
+  return Math.min(
+    POINTER_MAX_TRAVEL_PIXELS,
+    Math.max(12, wheelRadiusPixels * 0.06),
+  );
+}
+
+function pointerOffsetFor(
+  phase: number,
+  angularVelocity: number,
+  wheelRadiusPixels: number,
+): number {
+  if (angularVelocity <= 0) return 0;
+
+  const speedRatio = Math.min(1, angularVelocity / 34);
+  const maxTravel = pointerMaxTravelFor(wheelRadiusPixels);
+
+  return Math.sin(phase) * maxTravel * speedRatio;
+}
+
+function applyPointerTransform(
+  elements: Elements,
+  offsetPixels: number,
+  velocityPixelsPerSecond: number,
+): void {
+  const shift = Math.min(5, Math.abs(offsetPixels) * 0.18) * -1;
+  const tilt = Math.max(
+    -11,
+    Math.min(11, offsetPixels * -0.45 + velocityPixelsPerSecond * 0.012),
+  );
+
+  elements.pointer.style.setProperty(
+    '--wheel-pointer-offset',
+    `${offsetPixels.toFixed(2)}px`,
+  );
+  elements.pointer.style.setProperty(
+    '--wheel-pointer-shift',
+    `${shift.toFixed(2)}px`,
+  );
+  elements.pointer.style.setProperty(
+    '--wheel-pointer-tilt',
+    `${tilt.toFixed(2)}deg`,
+  );
 }
 
 function fitCanvas(canvas: HTMLCanvasElement): CanvasRenderingContext2D | null {
@@ -281,11 +410,16 @@ function initializeWheel(): void {
 
   const elements = queryElements(root);
   let state = loadState();
-  let rotation = POINTER_ANGLE - Math.PI;
+  let rotation = POINTER_RESTING_ANGLE - Math.PI;
   let winnerIndex: number | null = null;
   let spinFrame = 0;
+  let spinMotion: SpinMotion | null = null;
+  let spinLastDraw = 0;
   let idleFrame = 0;
   let idleLastDraw = 0;
+  let pointerOffsetPixels = 0;
+  let pointerPhase = 0;
+  let pointerVelocityPixelsPerSecond = 0;
   let spinning = false;
   const controller = new AbortController();
   const options = { signal: controller.signal };
@@ -350,6 +484,77 @@ function initializeWheel(): void {
     updateMotionState();
   };
 
+  const resetPointer = () => {
+    pointerOffsetPixels = 0;
+    pointerPhase = 0;
+    pointerVelocityPixelsPerSecond = 0;
+    applyPointerTransform(
+      elements,
+      pointerOffsetPixels,
+      pointerVelocityPixelsPerSecond,
+    );
+  };
+
+  const advancePointer = (
+    elapsedSeconds: number,
+    angularVelocity: number,
+  ): boolean => {
+    const wheelRadiusPixels = wheelRadiusFor(elements.canvas);
+    const maxOffset = pointerMaxTravelFor(wheelRadiusPixels);
+
+    if (angularVelocity > 0) {
+      const previousOffset = pointerOffsetPixels;
+      pointerPhase = normalizeAngle(
+        pointerPhase - angularVelocity * elapsedSeconds,
+      );
+      pointerOffsetPixels = pointerOffsetFor(
+        pointerPhase,
+        angularVelocity,
+        wheelRadiusPixels,
+      );
+      pointerVelocityPixelsPerSecond =
+        (pointerOffsetPixels - previousOffset) /
+        Math.max(0.001, elapsedSeconds);
+
+      applyPointerTransform(
+        elements,
+        pointerOffsetPixels,
+        pointerVelocityPixelsPerSecond,
+      );
+
+      return false;
+    }
+
+    const pointerAcceleration =
+      -pointerOffsetPixels * POINTER_RETURN_STIFFNESS -
+      pointerVelocityPixelsPerSecond * POINTER_RETURN_DAMPING;
+
+    pointerVelocityPixelsPerSecond += pointerAcceleration * elapsedSeconds;
+    pointerOffsetPixels += pointerVelocityPixelsPerSecond * elapsedSeconds;
+    pointerOffsetPixels = Math.max(
+      -maxOffset,
+      Math.min(maxOffset, pointerOffsetPixels),
+    );
+
+    if (
+      angularVelocity === 0 &&
+      Math.abs(pointerOffsetPixels) < POINTER_SETTLE_OFFSET_PIXELS &&
+      Math.abs(pointerVelocityPixelsPerSecond) <
+        POINTER_SETTLE_VELOCITY_PIXELS_PER_SECOND
+    ) {
+      resetPointer();
+      return true;
+    }
+
+    applyPointerTransform(
+      elements,
+      pointerOffsetPixels,
+      pointerVelocityPixelsPerSecond,
+    );
+
+    return false;
+  };
+
   const setEntries = (entries: string[]) => {
     if (spinning) return;
     state = { ...state, entries };
@@ -364,18 +569,29 @@ function initializeWheel(): void {
     elements.dialog.close();
   };
 
-  const finishSpin = (selectedIndex: number, finalRotation: number) => {
-    rotation = finalRotation;
+  const finishSpin = () => {
+    const pointerAngle = pointerAngleForOffset(
+      pointerOffsetPixels,
+      wheelRadiusFor(elements.canvas),
+    );
+    const selectedIndex = winningIndexForRotation(
+      state.entries.length,
+      rotation,
+      pointerAngle,
+    );
+    const winner = state.entries[selectedIndex];
+
+    rotation = normalizeAngle(rotation);
     spinning = false;
+    spinMotion = null;
+    spinLastDraw = 0;
     winnerIndex = selectedIndex;
-    elements.winner.textContent = state.entries[selectedIndex];
+    elements.winner.textContent = winner;
     elements.removeDialogWinner.hidden = state.removeWinner;
-    render();
     elements.dialog.showModal();
-    updateMotionState();
+    render();
 
     if (state.removeWinner) {
-      const winner = state.entries[selectedIndex];
       state = {
         ...state,
         entries: removeEntryAt(state.entries, selectedIndex),
@@ -390,32 +606,30 @@ function initializeWheel(): void {
     if (spinning || state.entries.length < 2) return;
     stopIdleRotation();
     spinning = true;
+    winnerIndex = null;
+    spinMotion = createSpinMotion(prefersReducedMotion());
+    spinLastDraw = performance.now();
+    resetPointer();
     render();
 
-    const selectedIndex = secureRandomInt(state.entries.length);
-    const arc = TAU / state.entries.length;
-    const selectedCenter = selectedIndex * arc + arc / 2;
-    const reducedMotion = prefersReducedMotion();
-    const currentNormalized = ((rotation % TAU) + TAU) % TAU;
-    const targetNormalized =
-      (((POINTER_ANGLE - selectedCenter) % TAU) + TAU) % TAU;
-    const turnCount = reducedMotion
-      ? REDUCED_MOTION_SPIN_TURNS
-      : SPIN_TURNS + secureRandomInt(4);
-    const delta =
-      ((targetNormalized - currentNormalized + TAU) % TAU) + TAU * turnCount;
-    const startRotation = rotation;
-    const finalRotation = startRotation + delta;
-
-    const startedAt = performance.now();
     const animate = (now: number) => {
-      const elapsed = now - startedAt;
-      const progress = spinProgressFor(elapsed, SPIN_DURATION_MS);
-      rotation = startRotation + delta * progress;
+      if (!spinMotion) return;
+
+      const elapsedSeconds = Math.min(0.05, (now - spinLastDraw) / 1000);
+      spinLastDraw = now;
+      const wheelStopped = advanceSpinMotion(spinMotion, elapsedSeconds);
+
+      rotation += spinMotion.angularVelocity * elapsedSeconds;
       drawWheel(elements, state.entries, rotation);
-      if (progress < 1) spinFrame = requestAnimationFrame(animate);
-      else finishSpin(selectedIndex, finalRotation);
+      const pointerStopped = advancePointer(
+        elapsedSeconds,
+        spinMotion.angularVelocity,
+      );
+
+      if (wheelStopped && pointerStopped) finishSpin();
+      else spinFrame = requestAnimationFrame(animate);
     };
+
     spinFrame = requestAnimationFrame(animate);
   };
 
