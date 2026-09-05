@@ -2,6 +2,7 @@
 import { getCollection } from 'astro:content';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import SectionTitle from '../components/SectionTitle.astro';
+import { featuredProjects } from '../data/work';
 
 const posts = (await getCollection('writing', ({ data }) => !data.draft)).sort(
   (a, b) => b.data.publishedAt.valueOf() - a.data.publishedAt.valueOf(),
@@ -14,7 +15,7 @@ const formatDate = (date: Date) =>
 
 <BaseLayout
   title="Brijesh Bhakta"
-  description="Software engineer with 10 years of experience building dependable backend systems, web products, and mobile services."
+  description="Software engineer with 10 years of experience building products across backend, web, and mobile."
 >
   <section
     class="grid min-h-[max(620px,calc(91vh-96px))] content-between border-b border-rule pt-[clamp(3.5rem,7vw,7rem)] pb-8 max-mobile:min-h-auto max-mobile:pb-12"
@@ -24,7 +25,7 @@ const formatDate = (date: Date) =>
       <p
         class="mb-5 font-mono text-base font-semibold tracking-[0.12em] text-accent uppercase before:content-['//_']"
       >
-        Software engineer · 10 years in practice
+        Software engineer · Building since 2016
       </p>
       <h1
         class="mb-8 max-w-[1100px] font-serif text-[clamp(3.6rem,8.5vw,8.7rem)] leading-[0.98] font-normal tracking-[-0.035em] [&_em]:text-accent"
@@ -45,9 +46,7 @@ const formatDate = (date: Date) =>
       <p
         class="m-0 max-w-[670px] text-[clamp(1.15rem,2vw,1.45rem)] leading-normal text-secondary"
       >
-        I build dependable software across backend systems, web interfaces, and
-        mobile services bringing the whole product into view, not just one slice
-        of the stack.
+        I build dependable software across backend systems, web interfaces, and mobile applications. I bring the whole product into view, not just one slice of the stack.
       </p>
       <a
         class="justify-self-end font-mono text-[0.8rem] uppercase max-mobile:hidden"
@@ -86,8 +85,7 @@ const formatDate = (date: Date) =>
           Interfaces with intent
         </h3>
         <p class="text-secondary">
-          Product-focused web applications that turn complex workflows into
-          useful, understandable experiences.
+          Web applications designed around the product, turning complex workflows into clear and usable interfaces.
         </p>
       </article>
       <article
@@ -97,11 +95,10 @@ const formatDate = (date: Date) =>
         <h3
           class="mt-20 mb-4 font-serif text-[2rem] font-normal leading-[1.2] max-mobile:mt-10"
         >
-          Services in the real world
+          Products that move with people
         </h3>
         <p class="text-secondary">
-          Mobile-backed products for on-demand services, payments,
-          notifications, and connected camera workflows.
+          Mobile applications built around real world workflows, native capabilities, connected services, and reliable experiences across platforms.
         </p>
       </article>
     </div>
@@ -116,59 +113,26 @@ const formatDate = (date: Date) =>
       eyebrow="Selected earlier work"
       title="Products, not just code."
       link="/work"
-      linkLabel="See the work archive"
+      linkLabel="See the selected work"
     />
     <div class="border-t border-rule">
-      <article
-        class="grid grid-cols-[1fr_2fr_2fr] gap-8 border-b border-rule py-8 max-mobile:grid-cols-1 max-mobile:gap-3"
-      >
-        <p class="m-0 font-mono text-sm tracking-[0.06em] uppercase">
-          Backend systems<br />Node.js · SQL Server
-        </p>
-        <h3
-          class="m-0 font-serif text-[clamp(1.6rem,3vw,2.7rem)] font-normal leading-[1.2]"
-        >
-          Server health administration
-        </h3>
-        <p class="m-0 text-secondary">
-          An administration system that ran asynchronous health checks across
-          more than one hundred documented SQL Server instances and surfaced
-          their status on open dashboards.
-        </p>
-      </article>
-      <article
-        class="grid grid-cols-[1fr_2fr_2fr] gap-8 border-b border-rule py-8 max-mobile:grid-cols-1 max-mobile:gap-3"
-      >
-        <p class="m-0 font-mono text-sm tracking-[0.06em] uppercase">
-          Web product<br />React · Node.js
-        </p>
-        <h3
-          class="m-0 font-serif text-[clamp(1.6rem,3vw,2.7rem)] font-normal leading-[1.2]"
-        >
-          Investment portfolio management
-        </h3>
-        <p class="m-0 text-secondary">
-          Billing dashboards, detailed portfolio views, and invoice estimates
-          for a wider wealth-management platform.
-        </p>
-      </article>
-      <article
-        class="grid grid-cols-[1fr_2fr_2fr] gap-8 border-b border-rule py-8 max-mobile:grid-cols-1 max-mobile:gap-3"
-      >
-        <p class="m-0 font-mono text-sm tracking-[0.06em] uppercase">
-          Mobile services<br />Node.js · Payments
-        </p>
-        <h3
-          class="m-0 font-serif text-[clamp(1.6rem,3vw,2.7rem)] font-normal leading-[1.2]"
-        >
-          On-demand service platforms
-        </h3>
-        <p class="m-0 text-secondary">
-          Backend services for mobile products connecting customers and
-          providers through location-aware requests, notifications, and Stripe
-          Connect payments.
-        </p>
-      </article>
+      {
+        featuredProjects.map((project) => (
+          <article class="grid grid-cols-[1fr_2fr_2fr] gap-8 border-b border-rule py-8 max-mobile:grid-cols-1 max-mobile:gap-3">
+            <p class="m-0 font-mono text-sm tracking-[0.06em] uppercase">
+              {project.area}
+              <br />
+              {project.tech}
+            </p>
+            <h3 class="m-0 font-serif text-[clamp(1.6rem,3vw,2.7rem)] font-normal leading-[1.2]">
+              {project.title}
+            </h3>
+            <p class="m-0 text-secondary">
+              {project.description}
+            </p>
+          </article>
+        ))
+      }
     </div>
   </section>
 
@@ -177,7 +141,7 @@ const formatDate = (date: Date) =>
     aria-label="Recent writing"
   >
     <SectionTitle
-      eyebrow="From the archive"
+      eyebrow="Latest writing"
       title="Writing & notes."
       link="/writing"
       linkLabel="View all writing"

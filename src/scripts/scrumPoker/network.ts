@@ -201,13 +201,13 @@ export const createScrumPokerNetwork = ({
     if (connectionState !== 'connected' || iceConnectionState !== 'connected') {
       return 'poor';
     }
-    
+
     const pings = pingResults.get(peerId) || [];
     if (pings.length === 0) return 'unknown';
-    
+
     const avgLatency = pings.reduce((a, b) => a + b, 0) / pings.length;
     const reconnectCount = reconnectCounters.get(peerId) || 0;
-    
+
     if (avgLatency < 100 && reconnectCount === 0) return 'excellent';
     if (avgLatency < 200 && reconnectCount <= 1) return 'good';
     if (avgLatency < 500 && reconnectCount <= 3) return 'fair';
@@ -263,10 +263,10 @@ export const createScrumPokerNetwork = ({
       rtc.iceConnectionState,
     );
     const pings = pingResults.get(peerId) || [];
-    const avgLatency = pings.length > 0 
-      ? pings.reduce((a, b) => a + b, 0) / pings.length 
+    const avgLatency = pings.length > 0
+      ? pings.reduce((a, b) => a + b, 0) / pings.length
       : undefined;
-    
+
     const row: ConnectionDiagnostics = {
       participantId: connectionParticipants.get(peerId),
       peerId,
@@ -277,8 +277,8 @@ export const createScrumPokerNetwork = ({
       lastChangedAt: Date.now(),
       connectionQuality,
       latency: avgLatency,
-      connectionAge: connectionStartTimes.get(peerId) 
-        ? Date.now() - connectionStartTimes.get(peerId)! 
+      connectionAge: connectionStartTimes.get(peerId)
+        ? Date.now() - connectionStartTimes.get(peerId)!
         : 0,
       reconnectCount: reconnectCounters.get(peerId) || 0,
     };
@@ -286,7 +286,7 @@ export const createScrumPokerNetwork = ({
     if (DEBUG_BUILD || sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true') {
       // eslint-disable-next-line no-console
       console.debug('[Scrum Poker WebRTC]', reason, row);
-      
+
       // Enhanced logging for connection failures
       if (rtc.connectionState === 'failed' || rtc.iceConnectionState === 'failed') {
         // eslint-disable-next-line no-console
@@ -323,12 +323,12 @@ export const createScrumPokerNetwork = ({
 
   const scheduleReconnect = (remotePeerId: string) => {
     if (reconnectTimers.has(remotePeerId) || disposed) return;
-    
+
     // Increment reconnect counter
     const currentCount = reconnectCounters.get(remotePeerId) || 0;
     reconnectCounters.set(remotePeerId, currentCount + 1);
     totalMeshFailures++;
-    
+
     // Check if we should switch to fallback mode
     if (!usingFallbackMode && totalMeshFailures >= MESH_FAILURE_THRESHOLD) {
       usingFallbackMode = true;
@@ -341,7 +341,7 @@ export const createScrumPokerNetwork = ({
       }
       showToast('Switching to conservative connection mode for better reliability');
     }
-    
+
     if (DEBUG_BUILD || sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true') {
       // eslint-disable-next-line no-console
       console.log('[Scrum Poker WebRTC] Scheduling reconnect:', {
@@ -351,10 +351,10 @@ export const createScrumPokerNetwork = ({
         usingFallbackMode,
       });
     }
-    
+
     // Use longer delay in fallback mode
     const delay = usingFallbackMode ? RECONNECT_DELAY_MS * 2 : RECONNECT_DELAY_MS;
-    
+
     const timer = globalThis.setTimeout(() => {
       reconnectTimers.delete(remotePeerId);
       if (
@@ -414,7 +414,7 @@ export const createScrumPokerNetwork = ({
       // Keep only last 10 ping results
       if (pings.length > 10) pings.shift();
       pingResults.set(connection.peer, pings);
-      
+
       if (DEBUG_BUILD || sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true') {
         // eslint-disable-next-line no-console
         console.debug('[Scrum Poker WebRTC] Ping response:', {
@@ -470,7 +470,7 @@ export const createScrumPokerNetwork = ({
         if (connections.get(connection.peer) === connection)
           connections.delete(connection.peer);
         connection.close();
-        
+
         if (DEBUG_BUILD || sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true') {
           // eslint-disable-next-line no-console
           console.warn('[Scrum Poker WebRTC] Connection attempt timeout:', {
@@ -479,7 +479,7 @@ export const createScrumPokerNetwork = ({
             timeout: CONNECTION_TIMEOUT_MS,
           });
         }
-        
+
         scheduleReconnect(connection.peer);
       }, CONNECTION_TIMEOUT_MS),
     );
@@ -488,11 +488,11 @@ export const createScrumPokerNetwork = ({
       connectionAttemptTimers.delete(connection.peer);
       globalThis.clearTimeout(reconnectTimers.get(connection.peer));
       reconnectTimers.delete(connection.peer);
-      
+
       // Track connection start time and reset ping results
       connectionStartTimes.set(connection.peer, Date.now());
       pingResults.set(connection.peer, []);
-      
+
       if (DEBUG_BUILD || sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true') {
         // eslint-disable-next-line no-console
         console.log('[Scrum Poker WebRTC] Connection established:', {
@@ -500,7 +500,7 @@ export const createScrumPokerNetwork = ({
           reconnectCount: reconnectCounters.get(connection.peer) || 0,
         });
       }
-      
+
       sendOpen(connection, {
         type: 'hello',
         participant: getIdentity(),
@@ -562,7 +562,7 @@ export const createScrumPokerNetwork = ({
         connections.has(remotePeerId)
       )
         continue;
-      
+
       // In fallback mode, be more selective about connections
       if (usingFallbackMode) {
         const existingConnections = connections.size;
@@ -578,7 +578,7 @@ export const createScrumPokerNetwork = ({
           continue;
         }
       }
-      
+
       if (DEBUG_BUILD || sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true') {
         // eslint-disable-next-line no-console
         console.log('[Scrum Poker WebRTC] Establishing mesh connection:', {
@@ -588,7 +588,7 @@ export const createScrumPokerNetwork = ({
           usingFallbackMode,
         });
       }
-      
+
       registerConnection(
         peer.connect(remotePeerId, {
           reliable: true,
@@ -643,7 +643,7 @@ export const createScrumPokerNetwork = ({
       localPlayerId,
     ].toSorted((left, right) => left.localeCompare(right));
     const index = Math.max(0, ids.indexOf(localPlayerId));
-    
+
     if (DEBUG_BUILD || sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true') {
       // eslint-disable-next-line no-console
       console.log('[Scrum Poker WebRTC] Scheduling registry election:', {
@@ -653,7 +653,7 @@ export const createScrumPokerNetwork = ({
         delay: 300 + index * 300,
       });
     }
-    
+
     registryRetryTimer = globalThis.setTimeout(
       () => {
         registryRetryTimer = undefined;
@@ -762,7 +762,7 @@ export const createScrumPokerNetwork = ({
     const roomCode = getRoomCode();
     if (registryPeer || registryConnection?.open || disposed || !roomCode)
       return;
-    
+
     if (DEBUG_BUILD || sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true') {
       // eslint-disable-next-line no-console
       console.log('[Scrum Poker WebRTC] Attempting to claim registry:', {
@@ -771,7 +771,7 @@ export const createScrumPokerNetwork = ({
         roomCode,
       });
     }
-    
+
     const candidate = new Peer(registryPeerId(roomCode), PEER_OPTIONS);
     registryPeer = candidate;
     candidate.on('open', () => {
@@ -798,7 +798,7 @@ export const createScrumPokerNetwork = ({
     candidate.on('error', (error) => {
       if (registryPeer === candidate) registryPeer = undefined;
       if (!candidate.destroyed) candidate.destroy();
-      
+
       if (DEBUG_BUILD || sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true') {
         // eslint-disable-next-line no-console
         console.error('[Scrum Poker WebRTC] Registry claim error:', {
@@ -807,7 +807,7 @@ export const createScrumPokerNetwork = ({
           registryPeerId: registryPeerId(roomCode),
         });
       }
-      
+
       if (error.type === 'unavailable-id') {
         // Registry already exists, try to connect to it
         globalThis.setTimeout(connectToRegistry, REGISTRY_RETRY_MS);

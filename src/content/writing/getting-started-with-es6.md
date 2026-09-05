@@ -308,7 +308,7 @@ const calculations = {
 
 ## Template Literals
 
-Template literals are string literals which allow the usage of embedded expressions. Those expressins can be anything that can have a computed value.
+Template literals are string literals which allow the usage of embedded expressions. Those expressions can be anything that can have a computed value.
 
 While strings are enclosed in single or double quotes, template literals are enclosed by back-ticks (``). Template literals can have place holders. Place holders are indicated by the Dollar sign followed by the curly braces `${expression}`.
 
@@ -402,4 +402,4 @@ function asyncExample(waitTime = 3000) {
 asyncExample(5000).then(() => console.log('Will be logged after 5 secs.'));
 ```
 
-There is much to be learned for the promises and luckly [Mozilla](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise) has a really good documentation.
+There is much to learn about promises and luckily [Mozilla](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise) has a really good documentation.
