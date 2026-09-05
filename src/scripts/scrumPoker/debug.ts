@@ -14,15 +14,32 @@ import {
 declare global {
     var scrumPoker: {
       help: () => void;
-      showValues: () => void;
       showParticipants: () => void;
       showRoomState: () => void;
       showConnections: () => void;
       showNetworkConfig: () => void;
+      showConnectionMode: () => void;
+      showQualityReport: () => void;
       testConnection: () => void;
     } | undefined
 }
 /* eslint-enable no-unused-vars */
+
+const getLatencyStatus = (latency: number) => {
+  if (latency < 200) return 'Good';
+  if (latency < 500) return 'Fair';
+  return 'Poor';
+};
+
+const getReconnectStatus = (count: number) => {
+  if (count === 0) return 'Stable';
+  if (count < 5) return 'Some issues';
+  return 'Unstable';
+};
+
+const getPercentage = (count: number, total: number) => {
+  return total > 0 ? `${Math.round(count / total * 100)}%` : '0%';
+};
 
 export const enableDebugApi = ({
   getState,
@@ -31,6 +48,7 @@ export const enableDebugApi = ({
   getLocalVote,
   getDiagnostics,
   getNetworkConfig,
+  getConnectionMode,
   hasOpenConnection,
   debugBuild,
 }: {
@@ -47,6 +65,11 @@ export const enableDebugApi = ({
     hasTurnServers: boolean;
     usingPublicTurn: boolean;
   };
+  getConnectionMode: () => {
+    usingFallbackMode: boolean;
+    totalMeshFailures: number;
+    fallbackThreshold: number;
+  };
   hasOpenConnection: (player: Player) => boolean;
   debugBuild: boolean;
 }) => {
@@ -61,10 +84,6 @@ export const enableDebugApi = ({
         {
           command: 'scrumPoker.help()',
           description: 'List debug commands.',
-        },
-        {
-          command: 'scrumPoker.showValues()',
-          description: 'Show vote values when the privacy policy permits it.',
         },
         {
           command: 'scrumPoker.showParticipants()',
@@ -86,30 +105,15 @@ export const enableDebugApi = ({
           command: 'scrumPoker.testConnection()',
           description: 'Test basic WebRTC connectivity and show diagnostics.',
         },
+        {
+          command: 'scrumPoker.showConnectionMode()',
+          description: 'Show current connection mode and fallback status.',
+        },
+        {
+          command: 'scrumPoker.showQualityReport()',
+          description: 'Show overall connection quality report and recommendations.',
+        },
       ]),
-    showValues: () => {
-      const state = getState();
-      if (!state.revealed && !debugBuild) {
-        console.info('Hidden vote inspection is disabled in production.');
-        return;
-      }
-      console.table(
-        visiblePlayers().map((player) => ({
-          name: player.name,
-          estimate:
-            player.voteRoundId === state.roundId
-              ? (player.id === getLocalPlayerId() && !state.revealed
-                ? (getLocalVote() ?? '—')
-                : (player.vote ?? (player.hasVoted ? '?' : '—')))
-              : '—',
-          status: votingStatusFor(player, state, playerPresence(player)),
-        })),
-      );
-      if (!state.revealed)
-        console.info(
-          'Other hidden estimates are not transmitted to this peer, including in development.',
-        );
-    },
     showParticipants: () => {
       const state = getState();
       console.table(
@@ -158,6 +162,10 @@ export const enableDebugApi = ({
             iceConnectionState: row.iceConnectionState,
             iceGatheringState: row.iceGatheringState,
             signalingState: row.signalingState,
+            connectionQuality: row.connectionQuality,
+            latency: row.latency ? `${Math.round(row.latency)}ms` : 'N/A',
+            reconnectCount: row.reconnectCount,
+            connectionAge: row.connectionAge ? `${Math.round(row.connectionAge / 1000)}s` : 'N/A',
             presenceState: player ? playerPresence(player) : 'reconnecting',
             lastChangedAt: new Date(row.lastChangedAt).toISOString(),
           };
@@ -193,6 +201,128 @@ export const enableDebugApi = ({
           description: 'Using public TURN servers for corporate proxy traversal',
         },
       ]);
+    },
+    showConnectionMode: () => {
+      const mode = getConnectionMode();
+      console.table([
+        {
+          setting: 'Connection Mode',
+          value: mode.usingFallbackMode ? 'Fallback (Conservative)' : 'Mesh (Aggressive)',
+          description: 'Fallback mode limits connections for better reliability',
+        },
+        {
+          setting: 'Total Mesh Failures',
+          value: mode.totalMeshFailures,
+          description: 'Number of connection failures that occurred',
+        },
+        {
+          setting: 'Fallback Threshold',
+          value: mode.fallbackThreshold,
+          description: 'Failures required to switch to fallback mode',
+        },
+      ]);
+    },
+    showQualityReport: () => {
+      const diagnostics = getDiagnostics();
+      const mode = getConnectionMode();
+      const connections = [...diagnostics.values()];
+
+      if (connections.length === 0) {
+        console.log('No active connections to analyze.');
+        return;
+      }
+
+      const qualityCounts = {
+        excellent: 0,
+        good: 0,
+        fair: 0,
+        poor: 0,
+        unknown: 0,
+      };
+
+      let totalLatency = 0;
+      let latencyCount = 0;
+      let totalReconnects = 0;
+
+      for (const conn of connections) {
+        qualityCounts[conn.connectionQuality]++;
+        if (conn.latency) {
+          totalLatency += conn.latency;
+          latencyCount++;
+        }
+        totalReconnects += conn.reconnectCount;
+      }
+
+      const avgLatency = latencyCount > 0 ? totalLatency / latencyCount : 0;
+
+      console.log('=== Connection Quality Report ===');
+      console.table([
+        {
+          metric: 'Total Connections',
+          value: connections.length,
+          status: connections.length > 0 ? 'Active' : 'No connections',
+        },
+        {
+          metric: 'Average Latency',
+          value: avgLatency ? `${Math.round(avgLatency)}ms` : 'N/A',
+          status: getLatencyStatus(avgLatency),
+        },
+        {
+          metric: 'Total Reconnects',
+          value: totalReconnects,
+          status: getReconnectStatus(totalReconnects),
+        },
+        {
+          metric: 'Connection Mode',
+          value: mode.usingFallbackMode ? 'Fallback' : 'Mesh',
+          status: mode.usingFallbackMode ? 'Conservative' : 'Aggressive',
+        },
+        {
+          metric: 'Mesh Failures',
+          value: mode.totalMeshFailures,
+          status: mode.totalMeshFailures < mode.fallbackThreshold ? 'Normal' : 'High',
+        },
+      ]);
+
+      console.log('\nConnection Quality Distribution:');
+      console.table([
+        { quality: 'Excellent', count: qualityCounts.excellent, percentage: getPercentage(qualityCounts.excellent, connections.length) },
+        { quality: 'Good', count: qualityCounts.good, percentage: getPercentage(qualityCounts.good, connections.length) },
+        { quality: 'Fair', count: qualityCounts.fair, percentage: getPercentage(qualityCounts.fair, connections.length) },
+        { quality: 'Poor', count: qualityCounts.poor, percentage: getPercentage(qualityCounts.poor, connections.length) },
+        { quality: 'Unknown', count: qualityCounts.unknown, percentage: getPercentage(qualityCounts.unknown, connections.length) },
+      ]);
+
+      // Provide recommendations
+      console.log('\n=== Recommendations ===');
+      if (qualityCounts.poor > connections.length / 2) {
+        console.warn('⚠️ More than 50% of connections are poor quality.');
+        console.warn('   Recommendations:');
+        console.warn('   - Check network connectivity');
+        console.warn('   - Consider using wired connection instead of WiFi');
+        console.warn('   - Check if VPN/proxy is interfering');
+      }
+      if (avgLatency > 500) {
+        console.warn('⚠️ High latency detected (>500ms).');
+        console.warn('   Recommendations:');
+        console.warn('   - Check network speed');
+        console.warn('   - Reduce network congestion');
+        console.warn('   - Consider closer TURN servers');
+      }
+      if (totalReconnects > 5) {
+        console.warn('⚠️ High reconnection count detected.');
+        console.warn('   Recommendations:');
+        console.warn('   - Network may be unstable');
+        console.warn('   - Check for intermittent connectivity issues');
+        console.warn('   - System may have switched to fallback mode');
+      }
+      if (mode.usingFallbackMode) {
+        console.info('ℹ️ System is running in fallback mode for better reliability.');
+        console.info('   This limits connections to prevent overload.');
+      }
+      if (qualityCounts.excellent + qualityCounts.good > connections.length * 0.7) {
+        console.log('✅ Connection quality is good (>70% excellent/good).');
+      }
     },
     testConnection: () => {
       console.log('=== WebRTC Connection Test ===');

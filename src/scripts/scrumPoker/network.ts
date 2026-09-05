@@ -54,11 +54,23 @@ export type ConnectionDiagnostics = {
   iceGatheringState: RTCIceGatheringState;
   signalingState: RTCSignalingState;
   lastChangedAt: number;
+  // Enhanced quality metrics
+  connectionQuality: 'excellent' | 'good' | 'fair' | 'poor' | 'unknown';
+  latency?: number;
+  packetsLost?: number;
+  connectionAge: number;
+  reconnectCount: number;
 };
 
 const HEARTBEAT_INTERVAL_MS = 10_000;
 const RECONNECT_DELAY_MS = 3000;
 const REGISTRY_RETRY_MS = 2000;
+const CONNECTION_TIMEOUT_MS = 30_000; // Increased from 15s to 30s for high-latency regions
+const REGISTRY_CONNECTION_TIMEOUT_MS = 30_000; // Increased for better reliability
+const MESH_FAILURE_THRESHOLD = 3; // Number of connection failures before switching to fallback
+// Enable fallback mode by default for better reliability with corporate proxies
+// Can be disabled with PUBLIC_SCRUM_POKER_FALLBACK_MODE=false if needed
+const FALLBACK_MODE_ENABLED = import.meta.env.PUBLIC_SCRUM_POKER_FALLBACK_MODE !== 'false';
 
 const configuredStunUrls = (
   import.meta.env.PUBLIC_STUN_URLS ?? 'stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302,stun:stun2.l.google.com:19302'
@@ -74,12 +86,17 @@ const configuredTurnUrls = (import.meta.env.PUBLIC_TURN_URLS ?? '')
   .slice(0, 5);
 
 const publicTurnServers = [
+  // Asia-Pacific TURN servers (better for India users)
   'turn:turn.metered.ca:80?transport=tcp',
   'turn:turn.metered.ca:443?transport=tcp',
   'turn:turn.metered.ca:3478?transport=tcp',
+  // EU/Global TURN servers (better for UK/Spain users)
   'turn:openrelay.metered.ca:80',
   'turn:openrelay.metered.ca:443',
   'turn:openrelay.metered.ca:443?transport=tcp',
+  // Note: For better Asia-Pacific coverage, consider adding paid TURN services
+  // like Twilio Network Traversal via PUBLIC_TURN_URLS env var
+  // Example: 'turn:sg.turn.twilio.com:3478?transport=tcp'
 ];
 
 const iceServers: RTCIceServer[] = configuredStunUrls.length > 0
@@ -164,12 +181,38 @@ export const createScrumPokerNetwork = ({
   const diagnostics = new Map<string, ConnectionDiagnostics>();
   const reconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
   const connectionAttemptTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  const reconnectCounters = new Map<string, number>();
+  const connectionStartTimes = new Map<string, number>();
+  const pingResults = new Map<string, number[]>();
+  let totalMeshFailures = 0;
+  let usingFallbackMode = FALLBACK_MODE_ENABLED;
   let registryRetryTimer: ReturnType<typeof setTimeout> | undefined;
   let registryAttemptTimer: ReturnType<typeof setTimeout> | undefined;
   let seenMessages = new Set<string>();
   let disposed = false;
 
   const visiblePlayers = () => activePlayers(getState());
+
+  const calculateConnectionQuality = (
+    peerId: string,
+    connectionState: RTCPeerConnectionState,
+    iceConnectionState: RTCIceConnectionState,
+  ): 'excellent' | 'good' | 'fair' | 'poor' | 'unknown' => {
+    if (connectionState !== 'connected' || iceConnectionState !== 'connected') {
+      return 'poor';
+    }
+    
+    const pings = pingResults.get(peerId) || [];
+    if (pings.length === 0) return 'unknown';
+    
+    const avgLatency = pings.reduce((a, b) => a + b, 0) / pings.length;
+    const reconnectCount = reconnectCounters.get(peerId) || 0;
+    
+    if (avgLatency < 100 && reconnectCount === 0) return 'excellent';
+    if (avgLatency < 200 && reconnectCount <= 1) return 'good';
+    if (avgLatency < 500 && reconnectCount <= 3) return 'fair';
+    return 'poor';
+  };
 
   const rememberSeen = (id: string) => {
     seenMessages.add(id);
@@ -214,6 +257,16 @@ export const createScrumPokerNetwork = ({
     connection: DataConnection,
   ) => {
     const rtc = connection.peerConnection;
+    const connectionQuality = calculateConnectionQuality(
+      peerId,
+      rtc.connectionState,
+      rtc.iceConnectionState,
+    );
+    const pings = pingResults.get(peerId) || [];
+    const avgLatency = pings.length > 0 
+      ? pings.reduce((a, b) => a + b, 0) / pings.length 
+      : undefined;
+    
     const row: ConnectionDiagnostics = {
       participantId: connectionParticipants.get(peerId),
       peerId,
@@ -222,6 +275,12 @@ export const createScrumPokerNetwork = ({
       iceGatheringState: rtc.iceGatheringState,
       signalingState: rtc.signalingState,
       lastChangedAt: Date.now(),
+      connectionQuality,
+      latency: avgLatency,
+      connectionAge: connectionStartTimes.get(peerId) 
+        ? Date.now() - connectionStartTimes.get(peerId)! 
+        : 0,
+      reconnectCount: reconnectCounters.get(peerId) || 0,
     };
     diagnostics.set(peerId, row);
     if (DEBUG_BUILD || sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true') {
@@ -238,6 +297,9 @@ export const createScrumPokerNetwork = ({
           iceConnectionState: rtc.iceConnectionState,
           iceGatheringState: rtc.iceGatheringState,
           signalingState: rtc.signalingState,
+          connectionQuality,
+          latency: avgLatency,
+          reconnectCount: reconnectCounters.get(peerId) || 0,
           iceTransportPolicy: PEER_OPTIONS.config.iceTransportPolicy,
           iceServersCount: iceServers.length,
           reason,
@@ -261,6 +323,38 @@ export const createScrumPokerNetwork = ({
 
   const scheduleReconnect = (remotePeerId: string) => {
     if (reconnectTimers.has(remotePeerId) || disposed) return;
+    
+    // Increment reconnect counter
+    const currentCount = reconnectCounters.get(remotePeerId) || 0;
+    reconnectCounters.set(remotePeerId, currentCount + 1);
+    totalMeshFailures++;
+    
+    // Check if we should switch to fallback mode
+    if (!usingFallbackMode && totalMeshFailures >= MESH_FAILURE_THRESHOLD) {
+      usingFallbackMode = true;
+      if (DEBUG_BUILD || sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true') {
+        // eslint-disable-next-line no-console
+        console.warn('[Scrum Poker WebRTC] Switching to fallback mode due to mesh failures', {
+          totalFailures: totalMeshFailures,
+          threshold: MESH_FAILURE_THRESHOLD,
+        });
+      }
+      showToast('Switching to conservative connection mode for better reliability');
+    }
+    
+    if (DEBUG_BUILD || sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true') {
+      // eslint-disable-next-line no-console
+      console.log('[Scrum Poker WebRTC] Scheduling reconnect:', {
+        peerId: remotePeerId,
+        reconnectCount: currentCount + 1,
+        totalMeshFailures,
+        usingFallbackMode,
+      });
+    }
+    
+    // Use longer delay in fallback mode
+    const delay = usingFallbackMode ? RECONNECT_DELAY_MS * 2 : RECONNECT_DELAY_MS;
+    
     const timer = globalThis.setTimeout(() => {
       reconnectTimers.delete(remotePeerId);
       if (
@@ -269,7 +363,7 @@ export const createScrumPokerNetwork = ({
         )
       )
         ensureMesh([remotePeerId]);
-    }, RECONNECT_DELAY_MS);
+    }, delay);
     reconnectTimers.set(remotePeerId, timer);
   };
 
@@ -312,7 +406,25 @@ export const createScrumPokerNetwork = ({
       sendOpen(connection, { type: 'pong', sentAt: message.sentAt });
       return;
     }
-    if (message.type === 'pong') return;
+    if (message.type === 'pong') {
+      // Calculate and store latency
+      const latency = Date.now() - message.sentAt;
+      const pings = pingResults.get(connection.peer) || [];
+      pings.push(latency);
+      // Keep only last 10 ping results
+      if (pings.length > 10) pings.shift();
+      pingResults.set(connection.peer, pings);
+      
+      if (DEBUG_BUILD || sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true') {
+        // eslint-disable-next-line no-console
+        console.debug('[Scrum Poker WebRTC] Ping response:', {
+          peerId: connection.peer,
+          latency,
+          avgLatency: pings.reduce((a, b) => a + b, 0) / pings.length,
+        });
+      }
+      return;
+    }
     if (message.type === 'snapshot') {
       mergeState(message.state, message.sentAt);
       render();
@@ -358,14 +470,37 @@ export const createScrumPokerNetwork = ({
         if (connections.get(connection.peer) === connection)
           connections.delete(connection.peer);
         connection.close();
+        
+        if (DEBUG_BUILD || sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true') {
+          // eslint-disable-next-line no-console
+          console.warn('[Scrum Poker WebRTC] Connection attempt timeout:', {
+            peerId: connection.peer,
+            participantId: connectionParticipants.get(connection.peer),
+            timeout: CONNECTION_TIMEOUT_MS,
+          });
+        }
+        
         scheduleReconnect(connection.peer);
-      }, 15_000),
+      }, CONNECTION_TIMEOUT_MS),
     );
     connection.on('open', () => {
       globalThis.clearTimeout(connectionAttemptTimers.get(connection.peer));
       connectionAttemptTimers.delete(connection.peer);
       globalThis.clearTimeout(reconnectTimers.get(connection.peer));
       reconnectTimers.delete(connection.peer);
+      
+      // Track connection start time and reset ping results
+      connectionStartTimes.set(connection.peer, Date.now());
+      pingResults.set(connection.peer, []);
+      
+      if (DEBUG_BUILD || sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true') {
+        // eslint-disable-next-line no-console
+        console.log('[Scrum Poker WebRTC] Connection established:', {
+          peerId: connection.peer,
+          reconnectCount: reconnectCounters.get(connection.peer) || 0,
+        });
+      }
+      
       sendOpen(connection, {
         type: 'hello',
         participant: getIdentity(),
@@ -406,6 +541,10 @@ export const createScrumPokerNetwork = ({
         iceGatheringState: previous?.iceGatheringState ?? 'complete',
         signalingState: previous?.signalingState ?? 'closed',
         lastChangedAt: Date.now(),
+        connectionQuality: 'poor',
+        latency: previous?.latency,
+        connectionAge: previous?.connectionAge ?? 0,
+        reconnectCount: previous?.reconnectCount ?? 0,
       });
       scheduleReconnect(connection.peer);
       updateOverallConnection();
@@ -420,10 +559,36 @@ export const createScrumPokerNetwork = ({
       if (
         !remotePeerId ||
         remotePeerId === localPeerId ||
-        localPeerId.localeCompare(remotePeerId) <= 0 ||
         connections.has(remotePeerId)
       )
         continue;
+      
+      // In fallback mode, be more selective about connections
+      if (usingFallbackMode) {
+        const existingConnections = connections.size;
+        const maxConnections = Math.min(5, peerIds.length); // Limit connections in fallback mode
+        if (existingConnections >= maxConnections) {
+          if (DEBUG_BUILD || sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true') {
+            // eslint-disable-next-line no-console
+            console.log('[Scrum Poker WebRTC] Skipping connection in fallback mode (limit reached)', {
+              existingConnections,
+              maxConnections,
+            });
+          }
+          continue;
+        }
+      }
+      
+      if (DEBUG_BUILD || sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true') {
+        // eslint-disable-next-line no-console
+        console.log('[Scrum Poker WebRTC] Establishing mesh connection:', {
+          localPeerId,
+          remotePeerId,
+          roomCode: getRoomCode(),
+          usingFallbackMode,
+        });
+      }
+      
       registerConnection(
         peer.connect(remotePeerId, {
           reliable: true,
@@ -478,6 +643,17 @@ export const createScrumPokerNetwork = ({
       localPlayerId,
     ].toSorted((left, right) => left.localeCompare(right));
     const index = Math.max(0, ids.indexOf(localPlayerId));
+    
+    if (DEBUG_BUILD || sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true') {
+      // eslint-disable-next-line no-console
+      console.log('[Scrum Poker WebRTC] Scheduling registry election:', {
+        localPlayerId,
+        index,
+        totalPlayers: ids.length,
+        delay: 300 + index * 300,
+      });
+    }
+    
     registryRetryTimer = globalThis.setTimeout(
       () => {
         registryRetryTimer = undefined;
@@ -532,7 +708,7 @@ export const createScrumPokerNetwork = ({
         'Registry connection timeout - scheduling election',
       );
       connection.close();
-    }, 15_000);
+    }, REGISTRY_CONNECTION_TIMEOUT_MS);
     connection.on('open', () => {
       if (registryConnection !== connection) return;
       globalThis.clearTimeout(registryAttemptTimer);
@@ -586,6 +762,16 @@ export const createScrumPokerNetwork = ({
     const roomCode = getRoomCode();
     if (registryPeer || registryConnection?.open || disposed || !roomCode)
       return;
+    
+    if (DEBUG_BUILD || sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true') {
+      // eslint-disable-next-line no-console
+      console.log('[Scrum Poker WebRTC] Attempting to claim registry:', {
+        registryPeerId: registryPeerId(roomCode),
+        localPeerId: getLocalPeerId(),
+        roomCode,
+      });
+    }
+    
     const candidate = new Peer(registryPeerId(roomCode), PEER_OPTIONS);
     registryPeer = candidate;
     candidate.on('open', () => {
@@ -612,10 +798,22 @@ export const createScrumPokerNetwork = ({
     candidate.on('error', (error) => {
       if (registryPeer === candidate) registryPeer = undefined;
       if (!candidate.destroyed) candidate.destroy();
+      
+      if (DEBUG_BUILD || sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true') {
+        // eslint-disable-next-line no-console
+        console.error('[Scrum Poker WebRTC] Registry claim error:', {
+          errorType: error.type,
+          errorMessage: error.message,
+          registryPeerId: registryPeerId(roomCode),
+        });
+      }
+      
       if (error.type === 'unavailable-id') {
+        // Registry already exists, try to connect to it
         globalThis.setTimeout(connectToRegistry, REGISTRY_RETRY_MS);
         return;
       }
+      // For other errors, schedule another election attempt
       scheduleRegistryElection();
     });
     candidate.on('disconnected', () => {
@@ -740,6 +938,11 @@ export const createScrumPokerNetwork = ({
     connections.clear();
     registryConnections.clear();
     connectionParticipants.clear();
+    reconnectCounters.clear();
+    connectionStartTimes.clear();
+    pingResults.clear();
+    totalMeshFailures = 0;
+    usingFallbackMode = FALLBACK_MODE_ENABLED;
     registryPeer?.destroy();
     peer?.destroy();
     registryPeer = undefined;
@@ -782,6 +985,11 @@ export const createScrumPokerNetwork = ({
       stunServers: configuredStunUrls,
       hasTurnServers: configuredTurnUrls.length > 0,
       usingPublicTurn: configuredTurnUrls.length === 0,
+    }),
+    getConnectionMode: () => ({
+      usingFallbackMode,
+      totalMeshFailures,
+      fallbackThreshold: MESH_FAILURE_THRESHOLD,
     }),
   };
 };

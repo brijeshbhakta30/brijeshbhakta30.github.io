@@ -323,6 +323,7 @@ const initializeScrumPoker = () => {
       getLocalVote: () => localVote,
       getDiagnostics: network.diagnostics,
       getNetworkConfig: network.getNetworkConfig,
+      getConnectionMode: network.getConnectionMode,
       hasOpenConnection: network.hasOpenConnection,
       debugBuild: DEBUG_BUILD,
     });
