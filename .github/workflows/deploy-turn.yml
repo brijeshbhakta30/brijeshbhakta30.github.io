@@ -5,6 +5,7 @@ on:
     branches: [main, master]
     paths:
       - "workers/turn-credentials/**"
+      - ".github/workflows/deploy-turn.yml"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
   workflow_dispatch:

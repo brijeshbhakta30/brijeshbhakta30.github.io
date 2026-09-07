@@ -5,6 +5,7 @@ on:
     branches: [main, master]
     paths:
       - "**"
+      - "!.github/workflows/deploy-turn.yml"
       - "!workers/**"
 
   workflow_dispatch:
