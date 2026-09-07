@@ -1,0 +1,9 @@
+name = "scrum-poker-turn-credentials"
+main = "src/index.ts"
+compatibility_date = "2026-09-07"
+
+[vars]
+ALLOWED_ORIGINS = "https://brijeshbhakta.com,https://brijeshbhakta30.github.io"
+TURN_TTL_SECONDS = "86400"
+workers_dev = true
+preview_urls = false

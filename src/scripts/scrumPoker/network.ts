@@ -8,9 +8,23 @@ import {
   makeRandomId,
   mergeRoomState,
   type Player,
+  type PlayerRole,
   type RoomAction,
   type RoomState,
 } from './state';
+import {
+  canonicalTopology,
+  chooseClientCores,
+  chooseCoreTopology,
+  CLIENT_CORE_CONNECTIONS,
+  type CoreLoadInfo,
+  type CorePeerInfo,
+  EMPTY_TOPOLOGY,
+  MAX_CORE_PEERS,
+  type RoomTopology,
+  shouldAcceptTopology,
+  type TopologyParticipant,
+} from './topology';
 
 export type ParticipantIdentity = { id: string; peerId: string; name: string };
 
@@ -22,6 +36,8 @@ type DirectMessage =
       sentAt: number;
     }
   | { type: 'snapshot'; state: RoomState; sentAt: number }
+  | { type: 'topology'; topology: RoomTopology; sentAt: number }
+  | { type: 'core-load'; load: CoreLoadInfo }
   | { type: 'ping'; sentAt: number }
   | { type: 'pong'; sentAt: number };
 
@@ -43,8 +59,18 @@ type Envelope = {
 
 type RegistryMessage =
   | { type: 'discover'; participant: ParticipantIdentity }
-  | { type: 'welcome'; peerIds: string[]; state: RoomState; sentAt: number }
-  | { type: 'directory'; peerIds: string[] };
+  | {
+      type: 'welcome';
+      participants: ParticipantIdentity[];
+      topology: RoomTopology;
+      state: RoomState;
+      sentAt: number;
+    }
+  | {
+      type: 'directory';
+      participants: ParticipantIdentity[];
+      topology: RoomTopology;
+    };
 
 export type ConnectionDiagnostics = {
   participantId?: string;
@@ -60,6 +86,10 @@ export type ConnectionDiagnostics = {
   packetsLost?: number;
   connectionAge: number;
   reconnectCount: number;
+  role: PlayerRole;
+  isCoordinator: boolean;
+  connectedCoreIds: string[];
+  topologyGeneration: number;
 };
 
 const HEARTBEAT_INTERVAL_MS = 10_000;
@@ -67,13 +97,11 @@ const RECONNECT_DELAY_MS = 3000;
 const REGISTRY_RETRY_MS = 2000;
 const CONNECTION_TIMEOUT_MS = 30_000; // Increased from 15s to 30s for high-latency regions
 const REGISTRY_CONNECTION_TIMEOUT_MS = 30_000; // Increased for better reliability
-const MESH_FAILURE_THRESHOLD = 3; // Number of connection failures before switching to fallback
-// Enable fallback mode by default for better reliability with corporate proxies
-// Can be disabled with PUBLIC_SCRUM_POKER_FALLBACK_MODE=false if needed
-const FALLBACK_MODE_ENABLED = import.meta.env.PUBLIC_SCRUM_POKER_FALLBACK_MODE !== 'false';
+const POOR_RECONNECT_THRESHOLD = 4;
 
 const configuredStunUrls = (
-  import.meta.env.PUBLIC_STUN_URLS ?? 'stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302,stun:stun2.l.google.com:19302'
+  import.meta.env.PUBLIC_STUN_URLS ??
+  'stun:stun.cloudflare.com:3478,stun:stun.l.google.com:19302'
 )
   .split(',')
   .map((url: string) => url.trim())
@@ -84,53 +112,81 @@ const configuredTurnUrls = (import.meta.env.PUBLIC_TURN_URLS ?? '')
   .map((url: string) => url.trim())
   .filter(Boolean)
   .slice(0, 5);
+const turnCredentialsUrl = import.meta.env.PUBLIC_TURN_CREDENTIALS_URL ?? '';
+const iceTransportPolicy = (import.meta.env.PUBLIC_ICE_TRANSPORT_POLICY === 'relay'
+  ? 'relay'
+  : 'all') as RTCIceTransportPolicy;
 
-const publicTurnServers = [
-  // Asia-Pacific TURN servers (better for India users)
-  'turn:turn.metered.ca:80?transport=tcp',
-  'turn:turn.metered.ca:443?transport=tcp',
-  'turn:turn.metered.ca:3478?transport=tcp',
-  // EU/Global TURN servers (better for UK/Spain users)
-  'turn:openrelay.metered.ca:80',
-  'turn:openrelay.metered.ca:443',
-  'turn:openrelay.metered.ca:443?transport=tcp',
-  // Note: For better Asia-Pacific coverage, consider adding paid TURN services
-  // like Twilio Network Traversal via PUBLIC_TURN_URLS env var
-  // Example: 'turn:sg.turn.twilio.com:3478?transport=tcp'
-];
+const configuredStaticTurnServer = (): RTCIceServer | undefined =>
+  configuredTurnUrls.length > 0
+    ? {
+        urls: configuredTurnUrls,
+        username: import.meta.env.PUBLIC_TURN_USERNAME ?? '',
+        credential: import.meta.env.PUBLIC_TURN_CREDENTIAL ?? '',
+      }
+    : undefined;
 
-const iceServers: RTCIceServer[] = configuredStunUrls.length > 0
-  ? [{ urls: configuredStunUrls }]
-  : [];
+const stunIceServers = (): RTCIceServer[] =>
+  configuredStunUrls.length > 0
+    ? [{ urls: configuredStunUrls }]
+    : [];
 
-if (configuredTurnUrls.length > 0) {
-  iceServers.push({
-    urls: configuredTurnUrls,
-    username: import.meta.env.PUBLIC_TURN_USERNAME ?? '',
-    credential: import.meta.env.PUBLIC_TURN_CREDENTIAL ?? '',
-  });
-} else {
-  iceServers.push({
-    urls: publicTurnServers,
-    username: 'openrelayproject',
-    credential: 'openrelayproject',
-  });
-}
-const PEER_OPTIONS = {
+const baseIceServers = (): RTCIceServer[] => {
+  const servers = stunIceServers();
+  const staticTurn = configuredStaticTurnServer();
+  if (staticTurn) servers.push(staticTurn);
+  return servers;
+};
+
+const makePeerOptions = (iceServers: RTCIceServer[]) => ({
   debug: 0 as const,
   config: {
     iceServers,
     // Keep direct/STUN candidates enabled by default. Use relay only with
     // configured TURN credentials when explicitly testing or requiring relay.
-    iceTransportPolicy: (import.meta.env.PUBLIC_ICE_TRANSPORT_POLICY === 'relay'
-      ? 'relay'
-      : 'all') as RTCIceTransportPolicy,
+    iceTransportPolicy,
     sdpSemantics: 'unified-plan',
   },
+});
+
+type PeerOptions = ReturnType<typeof makePeerOptions>;
+
+const iceServerHasTurn = (server: RTCIceServer) => {
+  const urls = Array.isArray(server.urls) ? server.urls : [server.urls];
+  return urls.some(
+    (url) =>
+      typeof url === 'string' &&
+      (url.startsWith('turn:') || url.startsWith('turns:')),
+  );
 };
 
 export const DEBUG_BUILD =
   import.meta.env.DEV || import.meta.env.PUBLIC_SCRUM_POKER_DEBUG === 'true';
+
+const fetchTurnIceServers = async (): Promise<RTCIceServer[]> => {
+  if (!turnCredentialsUrl) return [];
+  try {
+    const response = await fetch(turnCredentialsUrl, {
+      method: 'GET',
+      credentials: 'omit',
+      headers: { accept: 'application/json' },
+    });
+    if (!response.ok) throw new Error(`TURN endpoint returned ${response.status}`);
+    const body = (await response.json()) as { iceServers?: RTCIceServer[] };
+    if (!Array.isArray(body.iceServers)) return [];
+    return body.iceServers.filter(
+      (server) =>
+        Boolean(server) &&
+        (typeof server.urls === 'string' || Array.isArray(server.urls)),
+    );
+  } catch (error) {
+    if (DEBUG_BUILD || sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true') {
+      // eslint-disable-next-line no-console
+      console.warn('[Scrum Poker WebRTC] TURN credentials unavailable', error);
+    }
+    return [];
+  }
+};
 
 const registryPeerId = (roomCode: string) =>
   `brijesh-scrum-${roomCode.toLowerCase()}`;
@@ -176,6 +232,7 @@ export const createScrumPokerNetwork = ({
   let registryPeer: Peer | undefined;
   let registryConnection: DataConnection | undefined;
   const registryConnections = new Map<string, DataConnection>();
+  const registryParticipants = new Map<string, ParticipantIdentity>();
   const connections = new Map<string, DataConnection>();
   const connectionParticipants = new Map<string, string>();
   const diagnostics = new Map<string, ConnectionDiagnostics>();
@@ -184,14 +241,205 @@ export const createScrumPokerNetwork = ({
   const reconnectCounters = new Map<string, number>();
   const connectionStartTimes = new Map<string, number>();
   const pingResults = new Map<string, number[]>();
-  let totalMeshFailures = 0;
-  let usingFallbackMode = FALLBACK_MODE_ENABLED;
+  const coreLoads = new Map<string, CoreLoadInfo>();
+  const intentionalClosures = new Set<string>();
+  let topology: RoomTopology = EMPTY_TOPOLOGY;
+  let activeIceServers = baseIceServers();
+  let peerOptions: PeerOptions = makePeerOptions(activeIceServers);
+  let totalConnectionFailures = 0;
   let registryRetryTimer: ReturnType<typeof setTimeout> | undefined;
   let registryAttemptTimer: ReturnType<typeof setTimeout> | undefined;
   let seenMessages = new Set<string>();
   let disposed = false;
 
   const visiblePlayers = () => activePlayers(getState());
+
+  const localRole: () => PlayerRole = () =>
+    topology.cores.some((core) => core.participantId === getLocalPlayerId())
+      ? 'core'
+      : 'participant';
+
+  const isTopologyCoordinator = () =>
+    topology.coordinatorParticipantId === getLocalPlayerId();
+
+  const connectedCoreIds = () =>
+    topology.cores
+      .filter((core) => connections.get(core.peerId)?.open)
+      .map((core) => core.participantId);
+
+  const rememberParticipant = (participant: ParticipantIdentity) => {
+    if (!participant.id || !participant.peerId) return;
+    registryParticipants.set(participant.peerId, participant);
+    connectionParticipants.set(participant.peerId, participant.id);
+  };
+
+  const participantDirectory = () => {
+    const participants = new Map<string, ParticipantIdentity>();
+    for (const participant of registryParticipants.values()) {
+      if (!participant.id || !participant.peerId) continue;
+      participants.set(participant.id, participant);
+    }
+    for (const player of visiblePlayers()) {
+      if (!player.id || !player.peerId) continue;
+      participants.set(player.id, {
+        id: player.id,
+        peerId: player.peerId,
+        name: player.name,
+      });
+    }
+    const local = getIdentity();
+    if (local.id && local.peerId) participants.set(local.id, local);
+    return [...participants.values()].toSorted((left, right) =>
+      left.id.localeCompare(right.id),
+    );
+  };
+
+  const healthRankFor = (peerId: string) => {
+    const diagnostic = diagnostics.get(peerId);
+    const reconnectCount = reconnectCounters.get(peerId) || 0;
+    const currentCorePeer = topology.cores.some((core) => core.peerId === peerId);
+    if (
+      diagnostic?.connectionState === 'failed' ||
+      diagnostic?.iceConnectionState === 'failed' ||
+      (currentCorePeer &&
+        (diagnostic?.connectionState === 'closed' ||
+          diagnostic?.iceConnectionState === 'closed')) ||
+      reconnectCount >= POOR_RECONNECT_THRESHOLD
+    )
+      return 2;
+    if (
+      diagnostic?.connectionQuality === 'poor' ||
+      diagnostic?.connectionState === 'disconnected' ||
+      diagnostic?.connectionState === 'closed'
+    )
+      return 1;
+    return 0;
+  };
+
+  const topologyParticipants = (): TopologyParticipant[] =>
+    participantDirectory().map((participant) => ({
+      participantId: participant.id,
+      peerId: participant.peerId,
+      healthRank: healthRankFor(participant.peerId),
+    }));
+
+  const publishCoreLoad = () => {
+    if (localRole() !== 'core') return;
+    const load: CoreLoadInfo = {
+      participantId: getLocalPlayerId(),
+      peerId: getLocalPeerId(),
+      connectionCount: [...connections.values()].filter(
+        (connection) => connection.open,
+      ).length,
+      connectionQuality: [...diagnostics.values()].some(
+        (row) => row.connectionQuality === 'poor',
+      )
+        ? 'fair'
+        : 'good',
+      sentAt: Date.now(),
+    };
+    coreLoads.set(load.participantId, load);
+    for (const connection of connections.values())
+      sendOpen(connection, { type: 'core-load', load } satisfies DirectMessage);
+  };
+
+  const acceptTopology = (candidate: RoomTopology) => {
+    const normalized = canonicalTopology(candidate);
+    if (
+      normalized.generation === topology.generation &&
+      normalized.coordinatorParticipantId === topology.coordinatorParticipantId &&
+      normalized.cores.length === topology.cores.length &&
+      normalized.cores.every(
+        (core, index) =>
+          core.participantId === topology.cores[index]?.participantId &&
+          core.peerId === topology.cores[index]?.peerId,
+      )
+    )
+      return false;
+    if (!shouldAcceptTopology(topology, normalized)) return false;
+    topology = normalized;
+    ensureTopologyConnections();
+    for (const connection of connections.values())
+      sendOpen(connection, {
+        type: 'topology',
+        topology,
+        sentAt: Date.now(),
+      } satisfies DirectMessage);
+    publishCoreLoad();
+    render();
+    return true;
+  };
+
+  const publishTopology = () => {
+    const message = {
+      type: 'topology',
+      topology,
+      sentAt: Date.now(),
+    } satisfies DirectMessage;
+    for (const connection of connections.values()) sendOpen(connection, message);
+    for (const connection of registryConnections.values())
+      sendOpen(connection, directoryMessage());
+  };
+
+  const updateTopologyIfCoordinator = () => {
+    if (!getLocalPlayerId() || !getLocalPeerId()) return;
+    const participants = topologyParticipants();
+    if (participants.length === 0) return;
+    if (topology.cores.length === 0) {
+      const accepted = acceptTopology(
+        chooseCoreTopology({
+          participants,
+          current: topology,
+          generation: topology.generation + 1,
+        }),
+      );
+      if (accepted && isTopologyCoordinator()) publishTopology();
+    }
+    const participantIds = new Set(
+      participants.map((participant) => participant.participantId),
+    );
+    const healthyCoreIds = topology.cores
+      .filter(
+        (core) =>
+          participantIds.has(core.participantId) &&
+          healthRankFor(core.peerId) < 2,
+      )
+      .toSorted((left, right) =>
+        left.participantId.localeCompare(right.participantId),
+      );
+    const electedCoordinatorId = healthyCoreIds[0]?.participantId ?? '';
+    if (
+      localRole() === 'core' &&
+      !isTopologyCoordinator() &&
+      topology.coordinatorParticipantId &&
+      electedCoordinatorId === getLocalPlayerId()
+    ) {
+      topology = chooseCoreTopology({
+        participants,
+        current: topology,
+        generation: topology.generation + 1,
+      });
+      ensureTopologyConnections();
+      publishTopology();
+      publishCoreLoad();
+      render();
+      return;
+    }
+    if (!isTopologyCoordinator()) return;
+    const next = chooseCoreTopology({
+      participants,
+      current: topology,
+      generation: topology.generation + 1,
+    });
+    const currentKey = JSON.stringify(canonicalTopology(topology));
+    const nextKey = JSON.stringify(canonicalTopology({ ...next, generation: topology.generation }));
+    if (currentKey === nextKey) return;
+    topology = next;
+    ensureTopologyConnections();
+    publishTopology();
+    publishCoreLoad();
+    render();
+  };
 
   const calculateConnectionQuality = (
     peerId: string,
@@ -220,10 +468,25 @@ export const createScrumPokerNetwork = ({
       seenMessages = new Set([...seenMessages].slice(-1000));
   };
 
-  const broadcastRaw = (message: unknown, exceptPeerId = '') => {
-    for (const [peerId, connection] of connections) {
-      if (peerId !== exceptPeerId) sendOpen(connection, message);
-    }
+  const relayTargetConnections = (exceptPeerId = '') => {
+    const openConnections = [...connections.entries()].filter(
+      ([peerId, connection]) => peerId !== exceptPeerId && connection.open,
+    );
+    if (topology.cores.length === 0 || localRole() === 'core')
+      return openConnections.map(([, connection]) => connection);
+
+    const corePeerIds = new Set(
+      chooseClientCores(topology, getLocalPlayerId(), coreLoads).map(
+        (core) => core.peerId,
+      ),
+    );
+    const coreConnections = openConnections
+      .filter(([peerId]) => corePeerIds.has(peerId))
+      .map(([, connection]) => connection);
+
+    return coreConnections.length > 0
+      ? coreConnections
+      : openConnections.map(([, connection]) => connection);
   };
 
   const relay = (payload: RelayedMessage) => {
@@ -234,7 +497,7 @@ export const createScrumPokerNetwork = ({
       payload,
     };
     rememberSeen(envelope.id);
-    broadcastRaw(envelope);
+    for (const connection of relayTargetConnections()) sendOpen(connection, envelope);
   };
 
   const mergeState = (remoteState: RoomState, sentAt?: number) => {
@@ -245,10 +508,16 @@ export const createScrumPokerNetwork = ({
   const handleRelay = (sourcePeerId: string, envelope: Envelope) => {
     if (seenMessages.has(envelope.id)) return;
     rememberSeen(envelope.id);
-    broadcastRaw(envelope, sourcePeerId);
+    if (topology.cores.length === 0 || localRole() === 'core')
+      for (const connection of relayTargetConnections(sourcePeerId))
+        sendOpen(connection, envelope);
     if (envelope.payload.type === 'action')
       onAction(envelope.payload.action, false);
-    else onPresence(envelope.payload);
+    else {
+      rememberParticipant(envelope.payload.participant);
+      onPresence(envelope.payload);
+      updateTopologyIfCoordinator();
+    }
   };
 
   const logConnectionTransition = (
@@ -281,6 +550,10 @@ export const createScrumPokerNetwork = ({
         ? Date.now() - connectionStartTimes.get(peerId)!
         : 0,
       reconnectCount: reconnectCounters.get(peerId) || 0,
+      role: localRole(),
+      isCoordinator: isTopologyCoordinator(),
+      connectedCoreIds: connectedCoreIds(),
+      topologyGeneration: topology.generation,
     };
     diagnostics.set(peerId, row);
     if (DEBUG_BUILD || sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true') {
@@ -300,8 +573,8 @@ export const createScrumPokerNetwork = ({
           connectionQuality,
           latency: avgLatency,
           reconnectCount: reconnectCounters.get(peerId) || 0,
-          iceTransportPolicy: PEER_OPTIONS.config.iceTransportPolicy,
-          iceServersCount: iceServers.length,
+          iceTransportPolicy: peerOptions.config.iceTransportPolicy,
+          iceServersCount: activeIceServers.length,
           reason,
           timestamp: new Date().toISOString(),
         });
@@ -317,7 +590,7 @@ export const createScrumPokerNetwork = ({
       (connection) => connection.open,
     ).length;
     if (others.length === 0 || openCount)
-      setConnection('Peer-to-peer room live', 'connected');
+      setConnection('Peer-to-peer topology live', 'connected');
     else setConnection('Reconnecting…', 'connecting');
   };
 
@@ -327,43 +600,24 @@ export const createScrumPokerNetwork = ({
     // Increment reconnect counter
     const currentCount = reconnectCounters.get(remotePeerId) || 0;
     reconnectCounters.set(remotePeerId, currentCount + 1);
-    totalMeshFailures++;
-
-    // Check if we should switch to fallback mode
-    if (!usingFallbackMode && totalMeshFailures >= MESH_FAILURE_THRESHOLD) {
-      usingFallbackMode = true;
-      if (DEBUG_BUILD || sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true') {
-        // eslint-disable-next-line no-console
-        console.warn('[Scrum Poker WebRTC] Switching to fallback mode due to mesh failures', {
-          totalFailures: totalMeshFailures,
-          threshold: MESH_FAILURE_THRESHOLD,
-        });
-      }
-      showToast('Switching to conservative connection mode for better reliability');
-    }
+    totalConnectionFailures++;
 
     if (DEBUG_BUILD || sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true') {
       // eslint-disable-next-line no-console
-      console.log('[Scrum Poker WebRTC] Scheduling reconnect:', {
+      console.log('[Scrum Poker WebRTC] Scheduling topology reconnect:', {
         peerId: remotePeerId,
         reconnectCount: currentCount + 1,
-        totalMeshFailures,
-        usingFallbackMode,
+        totalConnectionFailures,
+        topologyGeneration: topology.generation,
+        role: localRole(),
       });
     }
 
-    // Use longer delay in fallback mode
-    const delay = usingFallbackMode ? RECONNECT_DELAY_MS * 2 : RECONNECT_DELAY_MS;
-
     const timer = globalThis.setTimeout(() => {
       reconnectTimers.delete(remotePeerId);
-      if (
-        activePlayers(getState()).some(
-          (player) => player.peerId === remotePeerId,
-        )
-      )
-        ensureMesh([remotePeerId]);
-    }, delay);
+      ensureTopologyConnections();
+      updateTopologyIfCoordinator();
+    }, RECONNECT_DELAY_MS);
     reconnectTimers.set(remotePeerId, timer);
   };
 
@@ -430,7 +684,15 @@ export const createScrumPokerNetwork = ({
       render();
       return;
     }
-    connectionParticipants.set(connection.peer, message.participant.id);
+    if (message.type === 'topology') {
+      acceptTopology(message.topology);
+      return;
+    }
+    if (message.type === 'core-load') {
+      coreLoads.set(message.load.participantId, message.load);
+      return;
+    }
+    rememberParticipant(message.participant);
     const diagnostic = diagnostics.get(connection.peer);
     if (diagnostic) diagnostic.participantId = message.participant.id;
     mergeState(message.state, message.sentAt);
@@ -448,6 +710,13 @@ export const createScrumPokerNetwork = ({
       state,
       sentAt: Date.now(),
     } satisfies DirectMessage);
+    sendOpen(connection, {
+      type: 'topology',
+      topology,
+      sentAt: Date.now(),
+    } satisfies DirectMessage);
+    publishCoreLoad();
+    updateTopologyIfCoordinator();
     announceJoin();
     restoreLocalVote();
     render();
@@ -507,6 +776,13 @@ export const createScrumPokerNetwork = ({
         state: getState(),
         sentAt: Date.now(),
       } satisfies DirectMessage);
+      sendOpen(connection, {
+        type: 'topology',
+        topology,
+        sentAt: Date.now(),
+      } satisfies DirectMessage);
+      publishCoreLoad();
+      updateTopologyIfCoordinator();
       updateOverallConnection();
     });
     connection.on('data', (data) =>
@@ -528,6 +804,7 @@ export const createScrumPokerNetwork = ({
       scheduleReconnect(connection.peer);
     });
     connection.on('close', () => {
+      const intentional = intentionalClosures.delete(connection.peer);
       globalThis.clearTimeout(connectionAttemptTimers.get(connection.peer));
       connectionAttemptTimers.delete(connection.peer);
       if (connections.get(connection.peer) === connection)
@@ -545,77 +822,106 @@ export const createScrumPokerNetwork = ({
         latency: previous?.latency,
         connectionAge: previous?.connectionAge ?? 0,
         reconnectCount: previous?.reconnectCount ?? 0,
+        role: localRole(),
+        isCoordinator: isTopologyCoordinator(),
+        connectedCoreIds: connectedCoreIds(),
+        topologyGeneration: topology.generation,
       });
-      scheduleReconnect(connection.peer);
+      if (!intentional) scheduleReconnect(connection.peer);
+      updateTopologyIfCoordinator();
       updateOverallConnection();
       render();
     });
   };
 
-  function ensureMesh(peerIds: string[]) {
+  const connectToPeer = (remotePeerId: string, reason: string) => {
     const localPeerId = getLocalPeerId();
-    if (!peer || !localPeerId) return;
-    for (const remotePeerId of new Set(peerIds)) {
-      if (
-        !remotePeerId ||
-        remotePeerId === localPeerId ||
-        connections.has(remotePeerId)
-      )
-        continue;
+    if (
+      !peer ||
+      !localPeerId ||
+      !remotePeerId ||
+      remotePeerId === localPeerId ||
+      connections.has(remotePeerId)
+    )
+      return;
 
-      // In fallback mode, be more selective about connections
-      if (usingFallbackMode) {
-        const existingConnections = connections.size;
-        const maxConnections = Math.min(5, peerIds.length); // Limit connections in fallback mode
-        if (existingConnections >= maxConnections) {
-          if (DEBUG_BUILD || sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true') {
-            // eslint-disable-next-line no-console
-            console.log('[Scrum Poker WebRTC] Skipping connection in fallback mode (limit reached)', {
-              existingConnections,
-              maxConnections,
-            });
-          }
-          continue;
-        }
-      }
+    if (DEBUG_BUILD || sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true') {
+      // eslint-disable-next-line no-console
+      console.log('[Scrum Poker WebRTC] Establishing topology connection:', {
+        localPeerId,
+        remotePeerId,
+        roomCode: getRoomCode(),
+        reason,
+        role: localRole(),
+        topologyGeneration: topology.generation,
+      });
+    }
 
-      if (DEBUG_BUILD || sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true') {
-        // eslint-disable-next-line no-console
-        console.log('[Scrum Poker WebRTC] Establishing mesh connection:', {
-          localPeerId,
-          remotePeerId,
-          roomCode: getRoomCode(),
-          usingFallbackMode,
-        });
-      }
+    registerConnection(
+      peer.connect(remotePeerId, {
+        reliable: true,
+        metadata: { room: getRoomCode(), participantId: getLocalPlayerId() },
+      }),
+    );
+  };
 
-      registerConnection(
-        peer.connect(remotePeerId, {
-          reliable: true,
-          metadata: { room: getRoomCode(), participantId: getLocalPlayerId() },
-        }),
+  function desiredTopologyPeers() {
+    if (topology.cores.length === 0) return [] as CorePeerInfo[];
+    if (localRole() === 'core')
+      return topology.cores.filter(
+        (core) => core.participantId !== getLocalPlayerId(),
       );
+    return chooseClientCores(topology, getLocalPlayerId(), coreLoads);
+  }
+
+  function pruneParticipantConnections(desiredPeerIds: Set<string>) {
+    if (localRole() === 'core' || topology.cores.length === 0) return;
+    const requiredOpenConnections = Math.min(
+      CLIENT_CORE_CONNECTIONS,
+      topology.cores.filter((core) => core.participantId !== getLocalPlayerId())
+        .length,
+    );
+    const openDesiredConnections = [...desiredPeerIds].filter(
+      (peerId) => connections.get(peerId)?.open,
+    ).length;
+    if (openDesiredConnections < requiredOpenConnections) return;
+
+    for (const [peerId, connection] of connections) {
+      if (desiredPeerIds.has(peerId)) continue;
+      intentionalClosures.add(peerId);
+      connection.close();
+      connections.delete(peerId);
     }
   }
 
-  const registryDirectory = () =>
-    [
-      ...new Set([
-        getLocalPeerId(),
-        ...activePlayers(getState()).map((player) => player.peerId),
-        ...registryConnections.keys(),
-      ]),
-    ].filter(Boolean);
+  function ensureTopologyConnections() {
+    const localPeerId = getLocalPeerId();
+    if (!peer || !localPeerId) return;
+    updateTopologyIfCoordinator();
+    const desired = desiredTopologyPeers();
+    const desiredPeerIds = new Set(desired.map((core) => core.peerId));
+    for (const core of desired)
+      connectToPeer(
+        core.peerId,
+        localRole() === 'core' ? 'core-mesh' : 'client-core',
+      );
+    pruneParticipantConnections(desiredPeerIds);
+    updateOverallConnection();
+  }
+
+  function directoryMessage() {
+    return {
+      type: 'directory',
+      participants: participantDirectory(),
+      topology,
+    } satisfies RegistryMessage;
+  }
 
   const broadcastDirectory = () => {
-    const peerIds = registryDirectory();
-    const message = {
-      type: 'directory',
-      peerIds,
-    } satisfies RegistryMessage;
+    const message = directoryMessage();
     for (const connection of registryConnections.values())
       sendOpen(connection, message);
-    ensureMesh(peerIds);
+    ensureTopologyConnections();
   };
 
   const registerRegistryClient = (connection: DataConnection) => {
@@ -623,16 +929,27 @@ export const createScrumPokerNetwork = ({
     connection.on('data', (raw) => {
       const message = raw as RegistryMessage;
       if (message.type !== 'discover') return;
+      rememberParticipant(message.participant);
+      updateTopologyIfCoordinator();
       sendOpen(connection, {
         type: 'welcome',
-        peerIds: registryDirectory(),
+        participants: participantDirectory(),
+        topology,
         state: getState(),
         sentAt: Date.now(),
       } satisfies RegistryMessage);
       broadcastDirectory();
     });
-    connection.on('close', () => registryConnections.delete(connection.peer));
-    connection.on('error', () => registryConnections.delete(connection.peer));
+    connection.on('close', () => {
+      registryConnections.delete(connection.peer);
+      registryParticipants.delete(connection.peer);
+      updateTopologyIfCoordinator();
+    });
+    connection.on('error', () => {
+      registryConnections.delete(connection.peer);
+      registryParticipants.delete(connection.peer);
+      updateTopologyIfCoordinator();
+    });
   };
 
   const scheduleRegistryElection = () => {
@@ -731,11 +1048,19 @@ export const createScrumPokerNetwork = ({
       const message = raw as RegistryMessage;
       if (message.type === 'welcome') {
         mergeState(message.state, message.sentAt);
-        ensureMesh(message.peerIds);
+        for (const participant of message.participants)
+          rememberParticipant(participant);
+        acceptTopology(message.topology);
+        ensureTopologyConnections();
         announceJoin();
         restoreLocalVote();
         render();
-      } else if (message.type === 'directory') ensureMesh(message.peerIds);
+      } else if (message.type === 'directory') {
+        for (const participant of message.participants)
+          rememberParticipant(participant);
+        acceptTopology(message.topology);
+        ensureTopologyConnections();
+      }
     });
     const lostRegistry = () => {
       releaseRegistryConnection(
@@ -772,7 +1097,7 @@ export const createScrumPokerNetwork = ({
       });
     }
 
-    const candidate = new Peer(registryPeerId(roomCode), PEER_OPTIONS);
+    const candidate = new Peer(registryPeerId(roomCode), peerOptions);
     registryPeer = candidate;
     candidate.on('open', () => {
       const connection = registryConnection;
@@ -781,6 +1106,7 @@ export const createScrumPokerNetwork = ({
       registryAttemptTimer = undefined;
       connection?.close();
       candidate.on('connection', registerRegistryClient);
+      updateTopologyIfCoordinator();
       broadcastDirectory();
       announceJoin();
       restoreLocalVote();
@@ -840,20 +1166,32 @@ export const createScrumPokerNetwork = ({
   const start = () => {
     destroy();
     disposed = false;
-    setConnection('Joining peer mesh', 'connecting');
+    setConnection('Joining resilient topology', 'connecting');
+    void startPeer();
+  };
+
+  async function startPeer() {
+    const turnIceServers = await fetchTurnIceServers();
+    if (disposed) return;
+    activeIceServers =
+      turnIceServers.length > 0
+        ? [...stunIceServers(), ...turnIceServers]
+        : baseIceServers();
+    peerOptions = makePeerOptions(activeIceServers);
 
     if (DEBUG_BUILD || sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true') {
       // eslint-disable-next-line no-console
       console.log('[Scrum Poker WebRTC] Starting peer connection with config:', {
-        iceTransportPolicy: PEER_OPTIONS.config.iceTransportPolicy,
-        iceServersCount: iceServers.length,
+        iceTransportPolicy: peerOptions.config.iceTransportPolicy,
+        iceServersCount: activeIceServers.length,
         stunServers: configuredStunUrls,
-        hasTurnServers: configuredTurnUrls.length > 0,
-        usingPublicTurn: configuredTurnUrls.length === 0,
+        hasTurnServers:
+          turnIceServers.some((turnIceServer) => iceServerHasTurn(turnIceServer)) || configuredTurnUrls.length > 0,
+        turnCredentialsEndpointConfigured: Boolean(turnCredentialsUrl),
       });
     }
 
-    const roomPeer = new Peer(PEER_OPTIONS);
+    const roomPeer = new Peer(peerOptions);
     peer = roomPeer;
     roomPeer.on('open', (id) => {
       if (peer !== roomPeer || roomPeer.destroyed) return;
@@ -918,7 +1256,7 @@ export const createScrumPokerNetwork = ({
           console.debug('[Scrum Poker WebRTC] reconnect skipped', error);
       }
     });
-  };
+  }
 
   function destroy() {
     disposed = true;
@@ -937,12 +1275,18 @@ export const createScrumPokerNetwork = ({
     for (const connection of registryConnections.values()) connection.close();
     connections.clear();
     registryConnections.clear();
+    registryParticipants.clear();
     connectionParticipants.clear();
+    diagnostics.clear();
     reconnectCounters.clear();
     connectionStartTimes.clear();
     pingResults.clear();
-    totalMeshFailures = 0;
-    usingFallbackMode = FALLBACK_MODE_ENABLED;
+    coreLoads.clear();
+    intentionalClosures.clear();
+    topology = EMPTY_TOPOLOGY;
+    activeIceServers = baseIceServers();
+    peerOptions = makePeerOptions(activeIceServers);
+    totalConnectionFailures = 0;
     registryPeer?.destroy();
     peer?.destroy();
     registryPeer = undefined;
@@ -953,7 +1297,7 @@ export const createScrumPokerNetwork = ({
     start,
     destroy,
     relay,
-    ensureMesh,
+    ensureTopology: ensureTopologyConnections,
     connectToRegistry,
     broadcastDirectory,
     sendRegistryDiscover: () => {
@@ -974,22 +1318,29 @@ export const createScrumPokerNetwork = ({
       const peerId = [...connectionParticipants.entries()].find(
         ([, participantId]) => participantId === player.id,
       )?.[0];
-      return peerId ? connections.get(peerId)?.open === true : false;
+      if (peerId && connections.get(peerId)?.open === true) return true;
+      return connectedCoreIds().length > 0;
     },
     diagnostics: () => diagnostics,
     heartbeatIntervalMs: HEARTBEAT_INTERVAL_MS,
     getNetworkConfig: () => ({
-      iceTransportPolicy: PEER_OPTIONS.config.iceTransportPolicy,
-      iceServersCount: iceServers.length,
-      iceServers,
+      iceTransportPolicy: peerOptions.config.iceTransportPolicy,
+      iceServersCount: activeIceServers.length,
+      iceServers: activeIceServers,
       stunServers: configuredStunUrls,
-      hasTurnServers: configuredTurnUrls.length > 0,
-      usingPublicTurn: configuredTurnUrls.length === 0,
+      hasTurnServers: activeIceServers.some((activeIceServer) => iceServerHasTurn(activeIceServer)),
+      hasStaticTurnServers: configuredTurnUrls.length > 0,
+      turnCredentialsEndpointConfigured: Boolean(turnCredentialsUrl),
     }),
     getConnectionMode: () => ({
-      usingFallbackMode,
-      totalMeshFailures,
-      fallbackThreshold: MESH_FAILURE_THRESHOLD,
+      role: localRole(),
+      isCoordinator: isTopologyCoordinator(),
+      topology,
+      connectedCoreIds: connectedCoreIds(),
+      coreLoads: [...coreLoads.values()],
+      maxCorePeers: MAX_CORE_PEERS,
+      clientCoreConnections: CLIENT_CORE_CONNECTIONS,
+      totalConnectionFailures,
     }),
   };
 };

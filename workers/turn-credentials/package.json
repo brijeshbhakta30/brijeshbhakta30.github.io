@@ -1,0 +1,14 @@
+{
+	"name": "scrum-poker-turn-credentials",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "wrangler dev",
+		"deploy": "wrangler deploy"
+	},
+	"devDependencies": {
+		"typescript": "6.0.3",
+		"wrangler": "4.52.0"
+	}
+}

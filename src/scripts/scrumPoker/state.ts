@@ -5,6 +5,8 @@ export type VotingStatus = 'choosing' | 'voted' | 'revealed' | PresenceState;
 
 export type Clock = { counter: number; id: string };
 
+export type PlayerRole = 'core' | 'participant';
+
 export type Player = {
   id: string;
   peerId: string;

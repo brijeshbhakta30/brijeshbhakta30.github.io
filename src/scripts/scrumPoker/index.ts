@@ -211,7 +211,7 @@ const initializeScrumPoker = () => {
     player.pageHidden = message.pageHidden;
     if (message.participant.peerId !== player.peerId) {
       player.peerId = message.participant.peerId;
-      network.ensureMesh([message.participant.peerId]);
+      network.ensureTopology();
     }
     render();
   };
@@ -487,7 +487,7 @@ const initializeScrumPoker = () => {
     announceJoin();
     announcePresence();
     network.connectToRegistry();
-    network.ensureMesh(activePlayers(state).map((player) => player.peerId));
+    network.ensureTopology();
   };
   const handleVisibilityChange = () => {
     if (!localPlayerId) return;

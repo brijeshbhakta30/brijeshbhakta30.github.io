@@ -1,10 +1,12 @@
 /* eslint-disable no-console */
 import type { ConnectionDiagnostics } from './network';
+import type { CoreLoadInfo, RoomTopology } from './topology';
 
 import { DEBUG_CHEAT_CODE, DEBUG_SESSION_KEY } from './constants';
 import {
   activePlayers,
   type Player,
+  type PlayerRole,
   presenceFor,
   type RoomState,
   votingStatusFor,
@@ -44,13 +46,10 @@ const getPercentage = (count: number, total: number) => {
 export const enableDebugApi = ({
   getState,
   getCurrentRoom,
-  getLocalPlayerId,
-  getLocalVote,
   getDiagnostics,
   getNetworkConfig,
   getConnectionMode,
   hasOpenConnection,
-  debugBuild,
 }: {
   getState: () => RoomState;
   getCurrentRoom: () => string;
@@ -63,12 +62,18 @@ export const enableDebugApi = ({
     iceServers: RTCIceServer[];
     stunServers: string[];
     hasTurnServers: boolean;
-    usingPublicTurn: boolean;
+    hasStaticTurnServers: boolean;
+    turnCredentialsEndpointConfigured: boolean;
   };
   getConnectionMode: () => {
-    usingFallbackMode: boolean;
-    totalMeshFailures: number;
-    fallbackThreshold: number;
+    role: PlayerRole;
+    isCoordinator: boolean;
+    topology: RoomTopology;
+    connectedCoreIds: string[];
+    coreLoads: CoreLoadInfo[];
+    maxCorePeers: number;
+    clientCoreConnections: number;
+    totalConnectionFailures: number;
   };
   hasOpenConnection: (player: Player) => boolean;
   debugBuild: boolean;
@@ -107,7 +112,7 @@ export const enableDebugApi = ({
         },
         {
           command: 'scrumPoker.showConnectionMode()',
-          description: 'Show current connection mode and fallback status.',
+          description: 'Show current topology role and coordinator status.',
         },
         {
           command: 'scrumPoker.showQualityReport()',
@@ -166,6 +171,10 @@ export const enableDebugApi = ({
             latency: row.latency ? `${Math.round(row.latency)}ms` : 'N/A',
             reconnectCount: row.reconnectCount,
             connectionAge: row.connectionAge ? `${Math.round(row.connectionAge / 1000)}s` : 'N/A',
+            localRole: row.role,
+            localCoordinator: row.isCoordinator ? 'Yes' : 'No',
+            connectedCoreIds: row.connectedCoreIds.join(', '),
+            topologyGeneration: row.topologyGeneration,
             presenceState: player ? playerPresence(player) : 'reconnecting',
             lastChangedAt: new Date(row.lastChangedAt).toISOString(),
           };
@@ -192,13 +201,18 @@ export const enableDebugApi = ({
         },
         {
           setting: 'Custom TURN Servers',
-          value: config.hasTurnServers ? 'Yes' : 'No',
-          description: 'Whether custom TURN servers are configured via env vars',
+          value: config.hasStaticTurnServers ? 'Yes' : 'No',
+          description: 'Whether static TURN servers are configured via public env vars',
         },
         {
-          setting: 'Public TURN Fallback',
-          value: config.usingPublicTurn ? 'Yes' : 'No',
-          description: 'Using public TURN servers for corporate proxy traversal',
+          setting: 'TURN Credentials Endpoint',
+          value: config.turnCredentialsEndpointConfigured ? 'Yes' : 'No',
+          description: 'Whether temporary TURN credentials are requested before PeerJS starts',
+        },
+        {
+          setting: 'TURN Available',
+          value: config.hasTurnServers ? 'Yes' : 'No',
+          description: 'Whether the active ICE config includes TURN URLs',
         },
       ]);
     },
@@ -206,21 +220,39 @@ export const enableDebugApi = ({
       const mode = getConnectionMode();
       console.table([
         {
-          setting: 'Connection Mode',
-          value: mode.usingFallbackMode ? 'Fallback (Conservative)' : 'Mesh (Aggressive)',
-          description: 'Fallback mode limits connections for better reliability',
+          setting: 'Topology Role',
+          value: mode.role,
+          description: 'Core peers form the backbone; participants connect to two cores',
         },
         {
-          setting: 'Total Mesh Failures',
-          value: mode.totalMeshFailures,
-          description: 'Number of connection failures that occurred',
+          setting: 'Coordinator',
+          value: mode.isCoordinator ? 'This peer' : mode.topology.coordinatorParticipantId || 'None',
+          description: 'Topology coordination only; Scrum Poker actions remain peer-authorized',
         },
         {
-          setting: 'Fallback Threshold',
-          value: mode.fallbackThreshold,
-          description: 'Failures required to switch to fallback mode',
+          setting: 'Topology Generation',
+          value: mode.topology.generation,
+          description: 'Monotonic topology version accepted by participants',
+        },
+        {
+          setting: 'Core Peers',
+          value: mode.topology.cores
+            .map((core) => core.participantId)
+            .join(', ') || 'None',
+          description: `Up to ${mode.maxCorePeers} peers in a full core mesh`,
+        },
+        {
+          setting: 'Connected Cores',
+          value: mode.connectedCoreIds.join(', ') || 'None',
+          description: `Participants target ${mode.clientCoreConnections} distinct core connections`,
+        },
+        {
+          setting: 'Connection Failures',
+          value: mode.totalConnectionFailures,
+          description: 'Failures tracked for diagnostics and core eligibility',
         },
       ]);
+      if (mode.coreLoads.length > 0) console.table(mode.coreLoads);
     },
     showQualityReport: () => {
       const diagnostics = getDiagnostics();
@@ -273,14 +305,19 @@ export const enableDebugApi = ({
           status: getReconnectStatus(totalReconnects),
         },
         {
-          metric: 'Connection Mode',
-          value: mode.usingFallbackMode ? 'Fallback' : 'Mesh',
-          status: mode.usingFallbackMode ? 'Conservative' : 'Aggressive',
+          metric: 'Topology Role',
+          value: mode.role,
+          status: mode.isCoordinator ? 'Coordinator' : 'Member',
         },
         {
-          metric: 'Mesh Failures',
-          value: mode.totalMeshFailures,
-          status: mode.totalMeshFailures < mode.fallbackThreshold ? 'Normal' : 'High',
+          metric: 'Topology Generation',
+          value: mode.topology.generation,
+          status: mode.topology.cores.length > 0 ? 'Published' : 'Pending',
+        },
+        {
+          metric: 'Connection Failures',
+          value: mode.totalConnectionFailures,
+          status: mode.totalConnectionFailures < 5 ? 'Normal' : 'High',
         },
       ]);
 
@@ -314,11 +351,7 @@ export const enableDebugApi = ({
         console.warn('   Recommendations:');
         console.warn('   - Network may be unstable');
         console.warn('   - Check for intermittent connectivity issues');
-        console.warn('   - System may have switched to fallback mode');
-      }
-      if (mode.usingFallbackMode) {
-        console.info('ℹ️ System is running in fallback mode for better reliability.');
-        console.info('   This limits connections to prevent overload.');
+        console.warn('   - Check current topology generation and core health');
       }
       if (qualityCounts.excellent + qualityCounts.good > connections.length * 0.7) {
         console.log('✅ Connection quality is good (>70% excellent/good).');
@@ -342,7 +375,9 @@ export const enableDebugApi = ({
         iceServersCount: testConfig.iceServersCount,
         stunServers: testConfig.stunServers,
         hasTurnServers: testConfig.hasTurnServers,
-        usingPublicTurn: testConfig.usingPublicTurn,
+        hasStaticTurnServers: testConfig.hasStaticTurnServers,
+        turnCredentialsEndpointConfigured:
+          testConfig.turnCredentialsEndpointConfigured,
       });
 
       // Create a test peer connection

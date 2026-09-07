@@ -1,4 +1,4 @@
-import { getCollection, type CollectionEntry } from 'astro:content';
+import { type CollectionEntry, getCollection } from 'astro:content';
 
 export type WritingPost = CollectionEntry<'writing'>;
 
@@ -10,10 +10,12 @@ export const sortPostsByPublishedDate = (posts: WritingPost[]) =>
     (a, b) => b.data.publishedAt.valueOf() - a.data.publishedAt.valueOf(),
   );
 
-export const getWritingPosts = async () =>
-  sortPostsByPublishedDate(
-    (await getCollection('writing')).filter(shouldShowPost),
-  );
+export const getWritingPosts = async () => {
+  const posts = await getCollection('writing');
+  const activePosts = posts.filter(post => shouldShowPost(post));
+  return sortPostsByPublishedDate(activePosts);
+}
 
 export const getWritingTopics = (posts: WritingPost[]) =>
-  [...new Set(posts.flatMap((post) => post.data.tags))].sort();
+  [...new Set(posts.flatMap((post) => post.data.tags))]
+    .toSorted((a, b) => a.localeCompare(b));

@@ -1,7 +1,12 @@
+packages:
+  - "."
+  - "workers/*"
+
 allowBuilds:
   esbuild: true
   sharp: true
   unrs-resolver: true
+  workerd: true
 
 minimumReleaseAgeExclude:
   - eslint-config-blazex

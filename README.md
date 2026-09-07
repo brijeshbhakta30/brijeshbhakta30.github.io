@@ -61,7 +61,3 @@ Pretty room URLs are dynamic while this site is statically hosted. Astro middlew
 The workflow at `.github/workflows/deploy.yml` builds and deploys the static output on pushes to `master` or `main`, and can also be run manually. In the repository settings, set **Pages → Build and deployment → Source** to **GitHub Actions**.
 
 The site uses the custom domain `brijeshbhakta.com`; keep the existing DNS records and repository Pages domain setting in place.
-
-## Updating professional details
-
-The existing PDF resume was last updated in 2018 and is presented as an archive. Before publishing a new resume, replace `static/resume.pdf` and update the archive language on the resume and work pages. Add a verified LinkedIn URL to the contact page once available.
