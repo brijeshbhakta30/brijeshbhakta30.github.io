@@ -1,9 +1,11 @@
 ---
-import { getCollection, render, type CollectionEntry } from 'astro:content';
+import { render, type CollectionEntry } from 'astro:content';
+import DraftBadge from '../components/DraftBadge.astro';
+import { getWritingPosts } from '../data/writing';
 import BaseLayout from '../layouts/BaseLayout.astro';
 
 export async function getStaticPaths() {
-  const posts = await getCollection('writing', ({ data }) => !data.draft);
+  const posts = await getWritingPosts();
   return posts.map((post) => ({
     params: { slug: post.data.permalink.replace(/^\//, '').replace(/\/$/, '') },
     props: { post },
@@ -20,6 +22,7 @@ const formattedDate = new Intl.DateTimeFormat('en', { day: '2-digit', month: 'lo
   <article>
     <header class="border-b border-rule pt-[clamp(4.5rem,9vw,9rem)] pb-[clamp(3rem,6vw,6rem)]">
       <a class="mb-[clamp(3rem,6vw,6rem)] inline-block font-mono text-[0.8rem] tracking-[0.06em] text-accent uppercase" href="/writing"><span aria-hidden="true">←</span> Back to writing</a>
+      {post.data.draft && <div class="mb-6"><DraftBadge /></div>}
       <p class="mb-5 font-mono text-base font-semibold tracking-[0.12em] text-accent uppercase before:content-['//_']">{post.data.category} · {formattedDate}</p>
       <h1 class="mb-8 max-w-[980px] font-serif text-[clamp(3.4rem,7vw,7rem)] leading-[0.98] font-normal tracking-[-0.035em]">{post.data.title}</h1>
       <p class="max-w-[720px] text-[clamp(1.2rem,2vw,1.55rem)] leading-normal text-secondary">{post.data.description}</p>
@@ -29,6 +32,7 @@ const formattedDate = new Intl.DateTimeFormat('en', { day: '2-digit', month: 'lo
     </header>
     <div class="grid grid-cols-[minmax(160px,1fr)_minmax(0,760px)_1fr] gap-8 py-[clamp(4rem,8vw,8rem)] max-mobile:block">
       <aside class="sticky top-8 self-start font-mono text-[0.8rem] leading-[1.8] tracking-[0.05em] text-muted uppercase max-mobile:static max-mobile:mb-12" aria-label="Article information">
+        {post.data.draft && <p class="text-accent">Status<br />Draft</p>}
         <p>Published<br />{formattedDate}</p>
         <p>Filed under<br />{post.data.category}</p>
       </aside>

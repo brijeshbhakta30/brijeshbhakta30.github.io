@@ -1,12 +1,11 @@
 ---
-import { getCollection } from 'astro:content';
 import BaseLayout from '../layouts/BaseLayout.astro';
+import DraftBadge from '../components/DraftBadge.astro';
 import SectionTitle from '../components/SectionTitle.astro';
+import { getWritingPosts } from '../data/writing';
 import { featuredProjects } from '../data/work';
 
-const posts = (await getCollection('writing', ({ data }) => !data.draft)).sort(
-  (a, b) => b.data.publishedAt.valueOf() - a.data.publishedAt.valueOf(),
-);
+const posts = await getWritingPosts();
 const formatDate = (date: Date) =>
   new Intl.DateTimeFormat('en', { month: 'short', year: 'numeric' }).format(
     date,
@@ -159,9 +158,12 @@ const formatDate = (date: Date) =>
             >
               {formatDate(post.data.publishedAt)}
             </time>
-            <h3 class="m-0 font-serif text-[clamp(1.7rem,3vw,2.8rem)] font-normal leading-[1.2] max-mobile:col-span-full">
-              {post.data.title}
-            </h3>
+            <div class="max-mobile:col-span-full">
+              {post.data.draft && <DraftBadge />}
+              <h3 class="mt-2 mb-0 font-serif text-[clamp(1.7rem,3vw,2.8rem)] font-normal leading-[1.2]">
+                {post.data.title}
+              </h3>
+            </div>
             <span class="font-mono text-base tracking-[0.06em] uppercase max-mobile:col-start-2 max-mobile:row-start-1">
               {post.data.category} ↗
             </span>
