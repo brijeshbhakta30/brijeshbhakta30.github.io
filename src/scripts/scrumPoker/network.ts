@@ -251,6 +251,7 @@ export const createScrumPokerNetwork = ({
   let registryAttemptTimer: ReturnType<typeof setTimeout> | undefined;
   let seenMessages = new Set<string>();
   let disposed = false;
+  let syncingTopology = false;
 
   const visiblePlayers = () => activePlayers(getState());
 
@@ -382,63 +383,71 @@ export const createScrumPokerNetwork = ({
   };
 
   const updateTopologyIfCoordinator = () => {
-    if (!getLocalPlayerId() || !getLocalPeerId()) return;
-    const participants = topologyParticipants();
-    if (participants.length === 0) return;
-    if (topology.cores.length === 0) {
-      const accepted = acceptTopology(
-        chooseCoreTopology({
+    if (disposed || syncingTopology || !getLocalPlayerId() || !getLocalPeerId())
+      return;
+    syncingTopology = true;
+    try {
+      const participants = topologyParticipants();
+      if (participants.length === 0) return;
+      if (topology.cores.length === 0) {
+        const accepted = acceptTopology(
+          chooseCoreTopology({
+            participants,
+            current: topology,
+            generation: topology.generation + 1,
+          }),
+        );
+        if (accepted && isTopologyCoordinator()) publishTopology();
+      }
+      const participantIds = new Set(
+        participants.map((participant) => participant.participantId),
+      );
+      const healthyCoreIds = topology.cores
+        .filter(
+          (core) =>
+            participantIds.has(core.participantId) &&
+            healthRankFor(core.peerId) < 2,
+        )
+        .toSorted((left, right) =>
+          left.participantId.localeCompare(right.participantId),
+        );
+      const electedCoordinatorId = healthyCoreIds[0]?.participantId ?? '';
+      if (
+        localRole() === 'core' &&
+        !isTopologyCoordinator() &&
+        topology.coordinatorParticipantId &&
+        electedCoordinatorId === getLocalPlayerId()
+      ) {
+        topology = chooseCoreTopology({
           participants,
           current: topology,
           generation: topology.generation + 1,
-        }),
-      );
-      if (accepted && isTopologyCoordinator()) publishTopology();
-    }
-    const participantIds = new Set(
-      participants.map((participant) => participant.participantId),
-    );
-    const healthyCoreIds = topology.cores
-      .filter(
-        (core) =>
-          participantIds.has(core.participantId) &&
-          healthRankFor(core.peerId) < 2,
-      )
-      .toSorted((left, right) =>
-        left.participantId.localeCompare(right.participantId),
-      );
-    const electedCoordinatorId = healthyCoreIds[0]?.participantId ?? '';
-    if (
-      localRole() === 'core' &&
-      !isTopologyCoordinator() &&
-      topology.coordinatorParticipantId &&
-      electedCoordinatorId === getLocalPlayerId()
-    ) {
-      topology = chooseCoreTopology({
+        });
+        ensureTopologyConnections();
+        publishTopology();
+        publishCoreLoad();
+        render();
+        return;
+      }
+      if (!isTopologyCoordinator()) return;
+      const next = chooseCoreTopology({
         participants,
         current: topology,
         generation: topology.generation + 1,
       });
+      const currentKey = JSON.stringify(canonicalTopology(topology));
+      const nextKey = JSON.stringify(
+        canonicalTopology({ ...next, generation: topology.generation }),
+      );
+      if (currentKey === nextKey) return;
+      topology = next;
       ensureTopologyConnections();
       publishTopology();
       publishCoreLoad();
       render();
-      return;
+    } finally {
+      syncingTopology = false;
     }
-    if (!isTopologyCoordinator()) return;
-    const next = chooseCoreTopology({
-      participants,
-      current: topology,
-      generation: topology.generation + 1,
-    });
-    const currentKey = JSON.stringify(canonicalTopology(topology));
-    const nextKey = JSON.stringify(canonicalTopology({ ...next, generation: topology.generation }));
-    if (currentKey === nextKey) return;
-    topology = next;
-    ensureTopologyConnections();
-    publishTopology();
-    publishCoreLoad();
-    render();
   };
 
   const calculateConnectionQuality = (
@@ -757,6 +766,7 @@ export const createScrumPokerNetwork = ({
       connectionAttemptTimers.delete(connection.peer);
       globalThis.clearTimeout(reconnectTimers.get(connection.peer));
       reconnectTimers.delete(connection.peer);
+      if (disposed) return;
 
       // Track connection start time and reset ping results
       connectionStartTimes.set(connection.peer, Date.now());
@@ -785,12 +795,14 @@ export const createScrumPokerNetwork = ({
       updateTopologyIfCoordinator();
       updateOverallConnection();
     });
-    connection.on('data', (data) =>
-      handleDirectMessage(connection, data as DirectMessage | Envelope),
-    );
+    connection.on('data', (data) => {
+      if (disposed) return;
+      handleDirectMessage(connection, data as DirectMessage | Envelope);
+    });
     connection.on('error', (error) => {
       globalThis.clearTimeout(connectionAttemptTimers.get(connection.peer));
       connectionAttemptTimers.delete(connection.peer);
+      if (disposed) return;
       if (DEBUG_BUILD || sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true') {
         // eslint-disable-next-line no-console
         console.error('[Scrum Poker WebRTC] Data connection error:', {
@@ -809,6 +821,7 @@ export const createScrumPokerNetwork = ({
       connectionAttemptTimers.delete(connection.peer);
       if (connections.get(connection.peer) === connection)
         connections.delete(connection.peer);
+      if (disposed) return;
       const previous = diagnostics.get(connection.peer);
       diagnostics.set(connection.peer, {
         participantId: previous?.participantId,
@@ -896,8 +909,8 @@ export const createScrumPokerNetwork = ({
 
   function ensureTopologyConnections() {
     const localPeerId = getLocalPeerId();
-    if (!peer || !localPeerId) return;
-    updateTopologyIfCoordinator();
+    if (disposed || !peer || !localPeerId) return;
+    if (!syncingTopology) updateTopologyIfCoordinator();
     const desired = desiredTopologyPeers();
     const desiredPeerIds = new Set(desired.map((core) => core.peerId));
     for (const core of desired)
@@ -943,11 +956,13 @@ export const createScrumPokerNetwork = ({
     connection.on('close', () => {
       registryConnections.delete(connection.peer);
       registryParticipants.delete(connection.peer);
+      if (disposed) return;
       updateTopologyIfCoordinator();
     });
     connection.on('error', () => {
       registryConnections.delete(connection.peer);
       registryParticipants.delete(connection.peer);
+      if (disposed) return;
       updateTopologyIfCoordinator();
     });
   };

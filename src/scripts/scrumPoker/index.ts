@@ -262,9 +262,63 @@ const initializeScrumPoker = () => {
     }
   };
 
+  const timerSettings = () => ({
+    duration: normalizeTimerDuration(
+      Number(elements.timerInput.value) || DEFAULT_TIMER_SECONDS,
+    ),
+    autoReveal: elements.autoRevealInput.checked,
+  });
+
+  const stopRoomTimers = () => {
+    globalThis.clearInterval(timerInterval);
+    globalThis.clearInterval(presenceInterval);
+    timerInterval = undefined;
+    presenceInterval = undefined;
+  };
+
+  const startRoomTimers = () => {
+    stopRoomTimers();
+    timerInterval = globalThis.setInterval(() => {
+      if (!localPlayerId) return;
+      if (state.timerEndsAt === null || state.timerEndsAt > Date.now()) {
+        updateTimerDisplay(elements, state);
+        return;
+      }
+      if (state.autoReveal)
+        dispatchAction(makeAction('reveal', { roundId: state.roundId }));
+      else {
+        const settings = timerSettings();
+        dispatchAction(
+          makeAction('timer', {
+            roundId: state.roundId,
+            duration: settings.duration,
+            autoReveal: false,
+            endsAt: null,
+          }),
+        );
+      }
+    }, 250);
+    presenceInterval = globalThis.setInterval(() => {
+      if (!localPlayerId) return;
+      announcePresence();
+      const now = Date.now();
+      for (const player of activePlayers(state)) {
+        if (
+          player.id !== localPlayerId &&
+          now - player.lastSeenAt >= PRESENCE_TIMEOUT_MS
+        )
+          dispatchAction(makeAction('leave', { playerId: player.id }));
+      }
+      network.pingPeers(now);
+      network.broadcastDirectory();
+      render();
+    }, network.heartbeatIntervalMs);
+  };
+
   const returnHome = () => {
     if (localPlayerId)
       dispatchAction(makeAction('leave', { playerId: localPlayerId }));
+    stopRoomTimers();
     network.destroy();
     state = freshRoomState();
     currentRoom = '';
@@ -289,16 +343,10 @@ const initializeScrumPoker = () => {
     lastJoinAnnouncedAt = 0;
     revealAnimationUntil = 0;
     localVote = null;
+    startRoomTimers();
     enterRoom();
     network.start();
   };
-
-  const timerSettings = () => ({
-    duration: normalizeTimerDuration(
-      Number(elements.timerInput.value) || DEFAULT_TIMER_SECONDS,
-    ),
-    autoReveal: elements.autoRevealInput.checked,
-  });
 
   const configureTimer = (start: boolean) => {
     if (state.revealed) return;
@@ -432,40 +480,6 @@ const initializeScrumPoker = () => {
     else showToast('Profile saved');
   });
 
-  timerInterval = globalThis.setInterval(() => {
-    if (state.timerEndsAt === null || state.timerEndsAt > Date.now()) {
-      updateTimerDisplay(elements, state);
-      return;
-    }
-    if (state.autoReveal)
-      dispatchAction(makeAction('reveal', { roundId: state.roundId }));
-    else {
-      const settings = timerSettings();
-      dispatchAction(
-        makeAction('timer', {
-          roundId: state.roundId,
-          duration: settings.duration,
-          autoReveal: false,
-          endsAt: null,
-        }),
-      );
-    }
-  }, 250);
-  presenceInterval = globalThis.setInterval(() => {
-    announcePresence();
-    const now = Date.now();
-    for (const player of activePlayers(state)) {
-      if (
-        player.id !== localPlayerId &&
-        now - player.lastSeenAt >= PRESENCE_TIMEOUT_MS
-      )
-        dispatchAction(makeAction('leave', { playerId: player.id }));
-    }
-    network.pingPeers(now);
-    network.broadcastDirectory();
-    render();
-  }, network.heartbeatIntervalMs);
-
   function announcePresence() {
     if (!localPlayerId) return;
     const player = state.players.find((item) => item.id === localPlayerId);
@@ -523,8 +537,7 @@ const initializeScrumPoker = () => {
     document.removeEventListener('visibilitychange', handleVisibilityChange);
     window.removeEventListener('pageshow', handleResume);
     globalThis.removeEventListener('online', handleResume);
-    globalThis.clearInterval(timerInterval);
-    globalThis.clearInterval(presenceInterval);
+    stopRoomTimers();
     globalThis.clearTimeout(toastTimer);
     network.destroy();
     delete globalThis.scrumPoker;

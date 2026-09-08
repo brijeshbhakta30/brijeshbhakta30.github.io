@@ -133,7 +133,7 @@ export const freshRoomState = (): RoomState => ({
   roundBaseId: '',
   timerDuration: DEFAULT_TIMER_SECONDS,
   timerEndsAt: null,
-  autoReveal: false,
+  autoReveal: true,
   allowVoteChangesAfterReveal: true,
   version: 0,
   clocks: {
