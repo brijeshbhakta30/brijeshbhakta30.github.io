@@ -76,7 +76,6 @@ export const enableDebugApi = ({
     totalConnectionFailures: number;
   };
   hasOpenConnection: (player: Player) => boolean;
-  debugBuild: boolean;
 }) => {
   const visiblePlayers = () => activePlayers(getState());
   const playerPresence = (player: Player) =>

@@ -1,3 +1,4 @@
+import { createRoomActions } from './actions';
 import { DEBUG_SESSION_KEY } from './constants';
 import {
   createDebugCheatCodeHandler,
@@ -6,42 +7,19 @@ import {
 import { queryScrumPokerElements } from './dom';
 import {
   createScrumPokerNetwork,
-  DEBUG_BUILD,
   type ParticipantIdentity,
-  type RelayedMessage,
   type ScrumPokerNetwork,
 } from './network';
+import { createPresenceController } from './presence';
 import {
   setConnection as renderConnection,
   showError as renderError,
   renderScrumPoker,
   showToast as renderToast,
-  updateTimerDisplay,
 } from './render';
-import {
-  activePlayers,
-  applyRoomAction,
-  DEFAULT_TIMER_SECONDS,
-  freshRoomState,
-  makeRandomId,
-  normalizeTimerDuration,
-  PRESENCE_TIMEOUT_MS,
-  type RoomAction,
-  type RoomState,
-} from './state';
-import {
-  inviteUrl,
-  loadLocalVote,
-  makeRoomCode,
-  normalizeRoomCode,
-  roomFromLocation,
-  roomIdentity,
-  savedLocalProfileName,
-  savedProfileName,
-  persistLocalVote as storeLocalVote,
-  saveProfileName as storeProfileName,
-  updateRoomUrl,
-} from './storage';
+import { createRoomController } from './roomController';
+import { freshRoomState, type RoomState } from './state';
+import { createRoomTimers } from './timers';
 
 let disposeCurrentRoom: (() => void) | undefined;
 
@@ -57,8 +35,6 @@ const initializeScrumPoker = () => {
   let localVote: string | null = null;
   let logicalClock = 0;
   let toastTimer: ReturnType<typeof setInterval> | undefined;
-  let timerInterval: ReturnType<typeof setInterval> | undefined;
-  let presenceInterval: ReturnType<typeof setInterval> | undefined;
   let previouslyRevealed = false;
   let focusResultAfterReveal = false;
   let pendingRoomJoin = '';
@@ -92,15 +68,6 @@ const initializeScrumPoker = () => {
     name: localName,
   });
 
-  const saveProfileName = (name: string) => {
-    const nextName = storeProfileName(name);
-    if (!nextName) return '';
-    elements.createName.value = nextName;
-    elements.joinName.value = nextName;
-    elements.profileName.value = nextName;
-    return nextName;
-  };
-
   const render = () => {
     const result = renderScrumPoker({
       elements,
@@ -116,105 +83,51 @@ const initializeScrumPoker = () => {
     focusResultAfterReveal = result.focusResultAfterReveal;
   };
 
-  const makeAction = <T extends RoomAction['type']>(
-    type: T,
-    payload: Extract<RoomAction, { type: T }>['payload'],
-  ) => {
-    logicalClock = Math.max(logicalClock, state.version) + 1;
-    return {
-      id: `${String(logicalClock).padStart(10, '0')}-${localPlayerId}-${makeRandomId()}`,
-      actorId: localPlayerId,
-      counter: logicalClock,
-      sentAt: Date.now(),
-      type,
-      payload,
-    } as Extract<RoomAction, { type: T }>;
-  };
+  const actions = createRoomActions({
+    elements,
+    getCurrentRoom: () => currentRoom,
+    getLastJoinAnnouncedAt: () => lastJoinAnnouncedAt,
+    getLocalName: () => localName,
+    getLocalPeerId: () => localPeerId,
+    getLocalPlayerId: () => localPlayerId,
+    getLocalVote: () => localVote,
+    getLogicalClock: () => logicalClock,
+    getNetwork: () => network,
+    getState: () => state,
+    render,
+    setLastJoinAnnouncedAt: (value) => {
+      lastJoinAnnouncedAt = value;
+    },
+    setFocusResultAfterReveal: (value) => {
+      focusResultAfterReveal = value;
+    },
+    setLocalVote: (value) => {
+      localVote = value;
+    },
+    setLogicalClock: (value) => {
+      logicalClock = value;
+    },
+    setRevealAnimationUntil: (value) => {
+      revealAnimationUntil = value;
+    },
+    setState,
+  });
 
-  const persistLocalVote = () => {
-    storeLocalVote(currentRoom, state.roundId, localVote);
-  };
+  const presence = createPresenceController({
+    actions,
+    getIdentity: identity,
+    getLocalPlayerId: () => localPlayerId,
+    getNetwork: () => network,
+    getState: () => state,
+    render,
+  });
 
-  const processAction = (action: RoomAction, shouldRelay: boolean) => {
-    logicalClock = Math.max(logicalClock, action.counter);
-    const wasRevealed = state.revealed;
-    const previousRoundId = state.roundId;
-    state = applyRoomAction(state, action);
-    const revealStarted = !wasRevealed && state.revealed;
-    if (revealStarted) revealAnimationUntil = Date.now() + 450;
-    if (previousRoundId !== state.roundId) {
-      localVote = null;
-      revealAnimationUntil = 0;
-      persistLocalVote();
-    }
-    if (shouldRelay) network.relay({ type: 'action', action });
-    // eslint-disable-next-line @typescript-eslint/no-use-before-define
-    if (revealStarted && publishLocalVote()) return;
-    render();
-  };
-
-  const dispatchAction = (action: RoomAction) => processAction(action, true);
-
-  const publishLocalVote = () => {
-    const player = state.players.find((item) => item.id === localPlayerId);
-    if (!player || player.voteRoundId !== state.roundId || !player.hasVoted)
-      return false;
-    dispatchAction(
-      makeAction('vote', {
-        playerId: localPlayerId,
-        roundId: state.roundId,
-        hasVoted: true,
-        vote: localVote,
-      }),
-    );
-    return true;
-  };
-
-  const announceJoin = () => {
-    if (!localPlayerId || !localPeerId) return;
-    const now = Date.now();
-    if (now - lastJoinAnnouncedAt < 1000) return;
-    lastJoinAnnouncedAt = now;
-    dispatchAction(
-      makeAction('join', {
-        playerId: localPlayerId,
-        peerId: localPeerId,
-        name: localName,
-        now,
-      }),
-    );
-  };
-
-  const restoreLocalVote = () => {
-    if (localVote !== null) return;
-    const savedVote = loadLocalVote(currentRoom, state.roundId);
-    if (!savedVote) return;
-    localVote = savedVote;
-    dispatchAction(
-      makeAction('vote', {
-        playerId: localPlayerId,
-        roundId: state.roundId,
-        hasVoted: true,
-        vote: state.revealed ? localVote : null,
-      }),
-    );
-  };
-
-  const processPresence = (
-    message: Extract<RelayedMessage, { type: 'presence' }>,
-  ) => {
-    const player = state.players.find(
-      (item) => item.id === message.participant.id,
-    );
-    if (!player) return;
-    player.lastSeenAt = Date.now();
-    player.pageHidden = message.pageHidden;
-    if (message.participant.peerId !== player.peerId) {
-      player.peerId = message.participant.peerId;
-      network.ensureTopology();
-    }
-    render();
-  };
+  const timers = createRoomTimers({
+    actions,
+    elements,
+    getLocalPlayerId: () => localPlayerId,
+    getState: () => state,
+  });
 
   network = createScrumPokerNetwork({
     getState: () => state,
@@ -226,142 +139,63 @@ const initializeScrumPoker = () => {
     },
     getLocalPlayerId: () => localPlayerId,
     getIdentity: identity,
-    onAction: processAction,
-    onPresence: processPresence,
-    announceJoin,
-    restoreLocalVote,
+    onAction: actions.processAction,
+    onPresence: presence.processPresence,
+    announceJoin: actions.announceJoin,
+    restoreLocalVote: actions.restoreLocalVote,
     render,
     setConnection,
     showToast,
     showError,
   });
 
-  const enterRoom = () => {
-    elements.setup.classList.add('hidden');
-    elements.roomView.classList.remove('hidden');
-    elements.errorBox.classList.add('hidden');
-    elements.roomLabel.textContent = currentRoom;
-    updateRoomUrl(currentRoom);
-    saveProfileName(localName);
-    render();
-  };
-
-  const openProfile = (roomCode = '') => {
-    pendingRoomJoin = roomCode;
-    elements.profileName.value = localName || savedLocalProfileName();
-    elements.profileDialog.showModal();
-    requestAnimationFrame(() => elements.profileName.focus());
-  };
-
-  const copyInvite = async () => {
-    try {
-      await navigator.clipboard.writeText(inviteUrl(currentRoom));
-      showToast('Invite link copied');
-    } catch {
-      showToast(`Room code: ${currentRoom}`);
-    }
-  };
-
-  const timerSettings = () => ({
-    duration: normalizeTimerDuration(
-      Number(elements.timerInput.value) || DEFAULT_TIMER_SECONDS,
-    ),
-    autoReveal: elements.autoRevealInput.checked,
+  const roomController = createRoomController({
+    actions,
+    elements,
+    getCurrentRoom: () => currentRoom,
+    getLocalName: () => localName,
+    getLocalPlayerId: () => localPlayerId,
+    getNetwork: () => network,
+    getPendingRoomJoin: () => pendingRoomJoin,
+    presence,
+    render,
+    setCurrentRoom: (value) => {
+      currentRoom = value;
+    },
+    setFocusResultAfterReveal: (value) => {
+      focusResultAfterReveal = value;
+    },
+    setLastJoinAnnouncedAt: (value) => {
+      lastJoinAnnouncedAt = value;
+    },
+    setLocalName: (value) => {
+      localName = value;
+    },
+    setLocalPeerId: (value) => {
+      localPeerId = value;
+    },
+    setLocalPlayerId: (value) => {
+      localPlayerId = value;
+    },
+    setLocalVote: (value) => {
+      localVote = value;
+    },
+    setLogicalClock: (value) => {
+      logicalClock = value;
+    },
+    setPendingRoomJoin: (value) => {
+      pendingRoomJoin = value;
+    },
+    setPreviouslyRevealed: (value) => {
+      previouslyRevealed = value;
+    },
+    setRevealAnimationUntil: (value) => {
+      revealAnimationUntil = value;
+    },
+    setState,
+    showToast,
+    timers,
   });
-
-  const stopRoomTimers = () => {
-    globalThis.clearInterval(timerInterval);
-    globalThis.clearInterval(presenceInterval);
-    timerInterval = undefined;
-    presenceInterval = undefined;
-  };
-
-  const startRoomTimers = () => {
-    stopRoomTimers();
-    timerInterval = globalThis.setInterval(() => {
-      if (!localPlayerId) return;
-      if (state.timerEndsAt === null || state.timerEndsAt > Date.now()) {
-        updateTimerDisplay(elements, state);
-        return;
-      }
-      if (state.autoReveal)
-        dispatchAction(makeAction('reveal', { roundId: state.roundId }));
-      else {
-        const settings = timerSettings();
-        dispatchAction(
-          makeAction('timer', {
-            roundId: state.roundId,
-            duration: settings.duration,
-            autoReveal: false,
-            endsAt: null,
-          }),
-        );
-      }
-    }, 250);
-    presenceInterval = globalThis.setInterval(() => {
-      if (!localPlayerId) return;
-      announcePresence();
-      const now = Date.now();
-      for (const player of activePlayers(state)) {
-        if (
-          player.id !== localPlayerId &&
-          now - player.lastSeenAt >= PRESENCE_TIMEOUT_MS
-        )
-          dispatchAction(makeAction('leave', { playerId: player.id }));
-      }
-      network.pingPeers(now);
-      network.broadcastDirectory();
-      render();
-    }, network.heartbeatIntervalMs);
-  };
-
-  const returnHome = () => {
-    if (localPlayerId)
-      dispatchAction(makeAction('leave', { playerId: localPlayerId }));
-    stopRoomTimers();
-    network.destroy();
-    state = freshRoomState();
-    currentRoom = '';
-    localPlayerId = '';
-    localPeerId = '';
-    localVote = null;
-    previouslyRevealed = false;
-    focusResultAfterReveal = false;
-    revealAnimationUntil = 0;
-    elements.setup.classList.remove('hidden');
-    elements.roomView.classList.add('hidden');
-    updateRoomUrl();
-  };
-
-  const startRoom = (name: string, roomCode: string) => {
-    network.destroy();
-    localName = saveProfileName(name);
-    currentRoom = normalizeRoomCode(roomCode) || makeRoomCode();
-    localPlayerId = roomIdentity(currentRoom);
-    state = freshRoomState();
-    logicalClock = 0;
-    lastJoinAnnouncedAt = 0;
-    revealAnimationUntil = 0;
-    localVote = null;
-    startRoomTimers();
-    enterRoom();
-    network.start();
-  };
-
-  const configureTimer = (start: boolean) => {
-    if (state.revealed) return;
-    const settings = timerSettings();
-    dispatchAction(
-      makeAction('timer', {
-        roundId: state.roundId,
-        duration: settings.duration,
-        autoReveal: settings.autoReveal,
-        endsAt: start
-          ? Date.now() + settings.duration * 1000
-          : state.timerEndsAt,
-      }),
-    );
-  };
 
   const enableDebugApi = () => {
     installDebugApi({
@@ -373,171 +207,27 @@ const initializeScrumPoker = () => {
       getNetworkConfig: network.getNetworkConfig,
       getConnectionMode: network.getConnectionMode,
       hasOpenConnection: network.hasOpenConnection,
-      debugBuild: DEBUG_BUILD,
     });
   };
 
-  elements.createForm.addEventListener('submit', (event) => {
-    event.preventDefault();
-    elements.createRoomInput.value = normalizeRoomCode(
-      elements.createRoomInput.value,
-    );
-    if (elements.createForm.reportValidity())
-      startRoom(
-        elements.createName.value,
-        elements.createRoomInput.value || makeRoomCode(),
-      );
-  });
-  elements.joinForm.addEventListener('submit', (event) => {
-    event.preventDefault();
-    elements.roomInput.value = normalizeRoomCode(elements.roomInput.value);
-    if (elements.joinForm.reportValidity())
-      startRoom(elements.joinName.value, elements.roomInput.value);
-  });
-  elements.roomInput.addEventListener('input', () => {
-    elements.roomInput.value = normalizeRoomCode(elements.roomInput.value);
-  });
-  elements.createRoomInput.addEventListener('input', () => {
-    elements.createRoomInput.value = normalizeRoomCode(
-      elements.createRoomInput.value,
-    );
-  });
-  for (const button of elements.cardButtons) {
-    button.addEventListener('click', () => {
-      if (state.revealed && !state.allowVoteChangesAfterReveal) return;
-      localVote =
-        // eslint-disable-next-line sonarjs/different-types-comparison
-        localVote === button.dataset.card
-          ? null
-          : (button.dataset.card ?? null);
-      persistLocalVote();
-      dispatchAction(
-        makeAction('vote', {
-          playerId: localPlayerId,
-          roundId: state.roundId,
-          hasVoted: localVote !== null,
-          vote: state.revealed ? localVote : null,
-        }),
-      );
-    });
-  }
-  elements.revealButton.addEventListener('click', () => {
-    focusResultAfterReveal = true;
-    dispatchAction(makeAction('reveal', { roundId: state.roundId }));
-  });
-  elements.resetButton.addEventListener('click', () => {
-    dispatchAction(makeAction('new-round', { baseRoundId: state.roundId }));
-  });
-  elements.timerInput.addEventListener('change', () => configureTimer(false));
-  elements.autoRevealInput.addEventListener('change', () =>
-    configureTimer(false),
-  );
-  elements.startTimerButton.addEventListener('click', () =>
-    configureTimer(true),
-  );
-  elements.stopTimerButton.addEventListener('click', () => {
-    if (state.revealed) return;
-    const settings = timerSettings();
-    dispatchAction(
-      makeAction('timer', {
-        roundId: state.roundId,
-        duration: settings.duration,
-        autoReveal: settings.autoReveal,
-        endsAt: null,
-      }),
-    );
-  });
-  elements.allowVoteChangesInput.addEventListener('change', () => {
-    dispatchAction(
-      makeAction('voting-config', {
-        allowVoteChangesAfterReveal: elements.allowVoteChangesInput.checked,
-      }),
-    );
-  });
-
-  elements.profileButton.addEventListener('click', () => openProfile());
-  elements.profileClose.addEventListener('click', () => {
-    pendingRoomJoin = '';
-    elements.profileDialog.close();
-  });
-  elements.profileDialog.addEventListener('cancel', () => {
-    pendingRoomJoin = '';
-  });
-  elements.profileForm.addEventListener('submit', (event) => {
-    event.preventDefault();
-    if (!elements.profileForm.reportValidity()) return;
-    const nextName = saveProfileName(elements.profileName.value);
-    if (!nextName) return;
-    localName = nextName;
-    elements.profileDialog.close();
-    if (localPlayerId)
-      dispatchAction(
-        makeAction('rename', { playerId: localPlayerId, name: nextName }),
-      );
-    const roomCode = pendingRoomJoin;
-    pendingRoomJoin = '';
-    if (roomCode) startRoom(nextName, roomCode);
-    else showToast('Profile saved');
-  });
-
-  function announcePresence() {
-    if (!localPlayerId) return;
-    const player = state.players.find((item) => item.id === localPlayerId);
-    if (player) {
-      player.lastSeenAt = Date.now();
-      player.pageHidden = document.visibilityState !== 'visible';
-    }
-    network.relay({
-      type: 'presence',
-      participant: identity(),
-      pageHidden: document.visibilityState !== 'visible',
-      sentAt: Date.now(),
-    });
-    network.sendRegistryDiscover();
-  }
-
-  const handleResume = () => {
-    if (document.visibilityState !== 'visible' || !localPlayerId) return;
-    announceJoin();
-    announcePresence();
-    network.connectToRegistry();
-    network.ensureTopology();
-  };
-  const handleVisibilityChange = () => {
-    if (!localPlayerId) return;
-    announcePresence();
-    handleResume();
-  };
-  document.addEventListener('visibilitychange', handleVisibilityChange);
-  window.addEventListener('pageshow', handleResume);
-  globalThis.addEventListener('online', handleResume);
+  actions.bindVotingControls();
+  roomController.bindRoomControls();
+  timers.bindTimerControls();
+  presence.bindPresenceHandlers();
 
   const handleCheatCode = createDebugCheatCodeHandler({
     enable: enableDebugApi,
     showToast,
   });
   document.addEventListener('keydown', handleCheatCode);
-  elements.copyRoomButton.addEventListener('click', copyInvite);
-  elements.leaveRoomButton.addEventListener('click', returnHome);
 
-  const savedName = savedProfileName();
-  if (savedName) saveProfileName(savedName);
-  elements.createName.value = savedName;
-  elements.joinName.value = savedName;
   if (sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true') enableDebugApi();
-  const roomFromUrl = roomFromLocation();
-  if (roomFromUrl) {
-    elements.roomInput.value = roomFromUrl;
-    if (savedName) startRoom(savedName, roomFromUrl);
-    else openProfile(roomFromUrl);
-  }
+  roomController.initializeFromLocation();
 
   disposeCurrentRoom = () => {
     document.removeEventListener('keydown', handleCheatCode);
-    document.removeEventListener('visibilitychange', handleVisibilityChange);
-    window.removeEventListener('pageshow', handleResume);
-    globalThis.removeEventListener('online', handleResume);
-    stopRoomTimers();
+    presence.disposePresenceHandlers();
+    timers.stopRoomTimers();
     globalThis.clearTimeout(toastTimer);
     network.destroy();
     delete globalThis.scrumPoker;

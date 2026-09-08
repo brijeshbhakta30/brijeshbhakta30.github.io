@@ -1,0 +1,6 @@
+- Do **not** run any of the following commands unless I explicitly ask you to:
+  - `pnpm test`
+  - `pnpm check`
+  - `pnpm lint`
+  - `pnpm build`
+- Do not run equivalent full-project validation commands as a substitute.
