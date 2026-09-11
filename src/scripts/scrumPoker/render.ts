@@ -1,6 +1,7 @@
 import type { ScrumPokerElements } from './dom';
 
 import { CARD_ORDER } from './constants';
+import { incrementDebugCounter } from './debug';
 import {
   activePlayers,
   type Player,
@@ -100,8 +101,11 @@ const renderStatistics = (
   animateReveal: boolean,
 ) => {
   elements.statistics.classList.toggle('hidden', !state.revealed);
-  elements.statistics.classList.toggle('is-entering', animateReveal);
-  if (!state.revealed) return;
+  if (animateReveal) elements.statistics.classList.add('is-entering');
+  if (!state.revealed) {
+    elements.statistics.classList.remove('is-entering');
+    return;
+  }
   const numbers = numericVotes(players, state);
   elements.statLow.textContent = numbers.length > 0
     ? String(Math.min(...numbers))
@@ -160,6 +164,33 @@ const queueResultFocus = (
   return false;
 };
 
+let revealAnimationSequence = 0;
+const renderedPlayersGridHtml = new WeakMap<HTMLElement, string>();
+const REVEAL_ANIMATION_CLEANUP_MS = 820;
+
+const clearRevealAnimationClasses = (elements: ScrumPokerElements) => {
+  revealAnimationSequence++;
+  elements.statistics.classList.remove('is-entering');
+  for (const card of elements.playersGrid.querySelectorAll(
+    '.scrum-player-card.is-reveal-entering',
+  ))
+    card.classList.remove('is-reveal-entering');
+};
+
+const scheduleRevealAnimationCleanup = (
+  elements: ScrumPokerElements,
+  animateReveal: boolean,
+) => {
+  if (!animateReveal) return;
+  const sequence = ++revealAnimationSequence;
+  if (!matchMedia('(prefers-reduced-motion: reduce)').matches)
+    incrementDebugCounter('revealTransitionsAnimated');
+  globalThis.setTimeout(() => {
+    if (sequence !== revealAnimationSequence) return;
+    clearRevealAnimationClasses(elements);
+  }, REVEAL_ANIMATION_CLEANUP_MS);
+};
+
 export const renderScrumPoker = ({
   elements,
   state,
@@ -178,14 +209,15 @@ export const renderScrumPoker = ({
   revealAnimationActive: boolean;
   focusResultAfterReveal: boolean;
   hasOpenConnection: (player: Player) => boolean;
+// eslint-disable-next-line sonarjs/cognitive-complexity
 }) => {
   const players = activePlayers(state);
   const voted = players.filter(
     (player) => player.voteRoundId === state.roundId && player.hasVoted,
   ).length;
   const total = players.length;
-  const animateReveal = state.revealed && revealAnimationActive;
   const firstRevealRender = state.revealed && !previouslyRevealed;
+  const animateReveal = firstRevealRender && revealAnimationActive;
   const playerPresence = (player: Player): PresenceState =>
     presenceFor(player, Date.now(), hasOpenConnection(player));
   const compareRevealedPlayers = (first: Player, second: Player) => {
@@ -230,9 +262,9 @@ export const renderScrumPoker = ({
     ? 'Votes revealed'
     : 'Reveal votes';
   elements.playersGrid.classList.toggle('is-revealed', state.revealed);
-  elements.playersGrid.innerHTML = displayedPlayers
+  if (!state.revealed) clearRevealAnimationClasses(elements);
+  const playersGridContentKey = displayedPlayers
     .map((player, index) => {
-      const status = votingStatusFor(player, state, playerPresence(player));
       const hasVoted = player.voteRoundId === state.roundId && player.hasVoted;
       const angle = `${(index / Math.max(total, 1)) * Math.PI * 2 - Math.PI / 2}rad`;
       const throwAngle =
@@ -242,9 +274,47 @@ export const renderScrumPoker = ({
         state.revealed && player.voteRoundId === state.roundId && player.vote
           ? player.vote
           : '•';
-      return `<article class="scrum-player" style="--angle:${angle};--throw-x:${Math.cos(throwAngle) * 210}px;--throw-y:${Math.sin(throwAngle) * 150}px"><div class="scrum-player-card ${hasVoted ? 'is-voted' : ''} ${state.revealed && hasVoted ? 'is-revealed' : ''} ${animateReveal && hasVoted ? 'is-reveal-entering' : ''}">${escapeHtml(cardValue)}</div><strong class="scrum-player-name">${escapeHtml(player.name)}${player.id === localPlayerId ? ' (you)' : ''}</strong><span class="scrum-player-role">${votingStatusLabel(status)}</span></article>`;
+      const isCurrentPlayer = player.id === localPlayerId;
+      return [
+        state.revealed,
+        player.id,
+        player.name,
+        hasVoted,
+        cardValue,
+        isCurrentPlayer,
+        angle,
+        throwAngle,
+      ].join(':');
     })
-    .join('');
+    .join('|');
+  if (
+    renderedPlayersGridHtml.get(elements.playersGrid) !== playersGridContentKey
+  ) {
+    elements.playersGrid.innerHTML = displayedPlayers
+      .map((player, index) => {
+        const hasVoted =
+          player.voteRoundId === state.roundId && player.hasVoted;
+        const angle = `${(index / Math.max(total, 1)) * Math.PI * 2 - Math.PI / 2}rad`;
+        const throwAngle =
+          (index / Math.max(displayedPlayers.length, 1)) * Math.PI * 2 -
+          Math.PI / 2;
+        const cardValue =
+          state.revealed && player.voteRoundId === state.roundId && player.vote
+            ? player.vote
+            : '•';
+        const isCurrentPlayer = player.id === localPlayerId;
+      return `<article class="scrum-player" style="--angle:${angle};--throw-x:${Math.cos(throwAngle) * 210}px;--throw-y:${Math.sin(throwAngle) * 150}px">
+        <div class="scrum-player-card ${hasVoted ? 'is-voted' : ''} ${state.revealed && hasVoted ? 'is-revealed' : ''} ${animateReveal && hasVoted ? 'is-reveal-entering' : ''}">
+          ${escapeHtml(cardValue)}
+        </div>
+        <strong class="scrum-player-name ${isCurrentPlayer ? 'text-accent' : ''}">
+          ${escapeHtml(player.name)}
+        </strong>
+        </article>`;
+      })
+      .join('');
+    renderedPlayersGridHtml.set(elements.playersGrid, playersGridContentKey);
+  }
   elements.participantList.innerHTML = players
     .map((player) => {
       const status = votingStatusFor(player, state, playerPresence(player));
@@ -266,6 +336,7 @@ export const renderScrumPoker = ({
     : 'Tap again to clear';
   renderStatistics(elements, state, players, animateReveal);
   updateTimerDisplay(elements, state);
+  scheduleRevealAnimationCleanup(elements, animateReveal);
 
   return {
     previouslyRevealed: state.revealed,

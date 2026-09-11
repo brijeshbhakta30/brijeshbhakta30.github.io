@@ -2,6 +2,7 @@ import { createRoomActions } from './actions';
 import { DEBUG_SESSION_KEY } from './constants';
 import {
   createDebugCheatCodeHandler,
+  incrementDebugCounter,
   enableDebugApi as installDebugApi,
 } from './debug';
 import { queryScrumPokerElements } from './dom';
@@ -69,6 +70,7 @@ const initializeScrumPoker = () => {
   });
 
   const render = () => {
+    incrementDebugCounter('renderCalls');
     const result = renderScrumPoker({
       elements,
       state,

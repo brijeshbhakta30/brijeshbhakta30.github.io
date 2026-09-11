@@ -3,12 +3,14 @@ import Peer, { type DataConnection } from 'peerjs';
 import type { ConnectionStatus } from './render';
 
 import { DEBUG_SESSION_KEY } from './constants';
+import { incrementDebugCounter } from './debug';
 import {
   activePlayers,
   makeRandomId,
   mergeRoomState,
   type Player,
   type PlayerRole,
+  presenceFor,
   type RoomAction,
   type RoomState,
 } from './state';
@@ -92,12 +94,13 @@ export type ConnectionDiagnostics = {
   topologyGeneration: number;
 };
 
-const HEARTBEAT_INTERVAL_MS = 10_000;
 const RECONNECT_DELAY_MS = 3000;
 const REGISTRY_RETRY_MS = 2000;
 const CONNECTION_TIMEOUT_MS = 30_000; // Increased from 15s to 30s for high-latency regions
 const REGISTRY_CONNECTION_TIMEOUT_MS = 30_000; // Increased for better reliability
 const POOR_RECONNECT_THRESHOLD = 4;
+const PENDING_IMPORTANT_ACTION_TTL_MS = 15_000;
+const MAX_PENDING_IMPORTANT_ACTIONS = 30;
 
 const configuredStunUrls = (
   import.meta.env.PUBLIC_STUN_URLS ??
@@ -192,8 +195,36 @@ const registryPeerId = (roomCode: string) =>
   `brijesh-scrum-${roomCode.toLowerCase()}`;
 
 const sendOpen = (connection: DataConnection | undefined, message: unknown) => {
-  if (connection?.open) connection.send(message);
+  if (!connection?.open) return false;
+  connection.send(message);
+  return true;
 };
+
+const roomRenderKey = (state: RoomState) =>
+  JSON.stringify({
+    revealed: state.revealed,
+    round: state.round,
+    roundId: state.roundId,
+    roundBaseId: state.roundBaseId,
+    timerDuration: state.timerDuration,
+    timerEndsAt: state.timerEndsAt,
+    autoReveal: state.autoReveal,
+    allowVoteChangesAfterReveal: state.allowVoteChangesAfterReveal,
+    version: state.version,
+    clocks: state.clocks,
+    players: state.players.map((player) => ({
+      id: player.id,
+      peerId: player.peerId,
+      name: player.name,
+      hasVoted: player.hasVoted,
+      vote: player.vote,
+      voteRoundId: player.voteRoundId,
+      pageHidden: player.pageHidden,
+      pageHiddenAt: player.pageHiddenAt,
+      removed: player.removed,
+      clocks: player.clocks,
+    })),
+  });
 
 export const createScrumPokerNetwork = ({
   getState,
@@ -220,7 +251,7 @@ export const createScrumPokerNetwork = ({
   getLocalPlayerId: () => string;
   getIdentity: () => ParticipantIdentity;
   onAction: (action: RoomAction, shouldRelay: boolean) => void;
-  onPresence: (message: Extract<RelayedMessage, { type: 'presence' }>) => void;
+  onPresence: (message: Extract<RelayedMessage, { type: 'presence' }>) => boolean;
   announceJoin: () => void;
   restoreLocalVote: () => void;
   render: () => void;
@@ -252,6 +283,14 @@ export const createScrumPokerNetwork = ({
   let seenMessages = new Set<string>();
   let disposed = false;
   let syncingTopology = false;
+  const pendingImportantActions = new Map<
+    string,
+    {
+      action: RoomAction;
+      envelope: Envelope;
+      expiresAt: number;
+    }
+  >();
 
   const visiblePlayers = () => activePlayers(getState());
 
@@ -273,6 +312,33 @@ export const createScrumPokerNetwork = ({
     registryParticipants.set(participant.peerId, participant);
     connectionParticipants.set(participant.peerId, participant.id);
   };
+
+  function hasOpenConnection(player: Player) {
+    if (player.id === getLocalPlayerId()) return true;
+    const peerId = [...connectionParticipants.entries()].find(
+      ([, participantId]) => participantId === player.id,
+    )?.[0];
+    if (peerId && connections.get(peerId)?.open === true) return true;
+    return connectedCoreIds().length > 0;
+  }
+
+  const refreshParticipantActivity = (participantId: string | undefined) => {
+    if (!participantId) return false;
+    const player = getState().players.find((item) => item.id === participantId);
+    if (!player) return false;
+    const now = Date.now();
+    const previousStatus = presenceFor(
+      player,
+      now,
+      hasOpenConnection(player),
+    );
+    player.lastSeenAt = now;
+    const nextStatus = presenceFor(player, now, hasOpenConnection(player));
+    return previousStatus !== nextStatus;
+  };
+
+  const refreshPeerActivity = (peerId: string) =>
+    refreshParticipantActivity(connectionParticipants.get(peerId));
 
   const participantDirectory = () => {
     const participants = new Map<string, ParticipantIdentity>();
@@ -378,8 +444,10 @@ export const createScrumPokerNetwork = ({
       sentAt: Date.now(),
     } satisfies DirectMessage;
     for (const connection of connections.values()) sendOpen(connection, message);
-    for (const connection of registryConnections.values())
-      sendOpen(connection, directoryMessage());
+    for (const connection of registryConnections.values()) {
+      if (sendOpen(connection, directoryMessage()))
+        incrementDebugCounter('directoryMessagesSent');
+    }
   };
 
   const updateTopologyIfCoordinator = () => {
@@ -498,6 +566,71 @@ export const createScrumPokerNetwork = ({
       : openConnections.map(([, connection]) => connection);
   };
 
+  const isImportantAction = (action: RoomAction) =>
+    ['new-round', 'reveal', 'timer', 'vote'].includes(action.type);
+
+  const purgeExpiredPendingActions = () => {
+    const now = Date.now();
+    for (const [id, pending] of pendingImportantActions) {
+      if (pending.expiresAt <= now) pendingImportantActions.delete(id);
+    }
+  };
+
+  const queueImportantAction = (payload: RelayedMessage, envelope: Envelope) => {
+    if (payload.type !== 'action' || !isImportantAction(payload.action)) return;
+    purgeExpiredPendingActions();
+    if (payload.action.type === 'vote') {
+      for (const [id, pending] of pendingImportantActions) {
+        if (
+          pending.action.type === 'vote' &&
+          pending.action.payload.playerId === payload.action.payload.playerId &&
+          pending.action.payload.roundId === payload.action.payload.roundId
+        )
+          pendingImportantActions.delete(id);
+      }
+    }
+    while (pendingImportantActions.size >= MAX_PENDING_IMPORTANT_ACTIONS) {
+      const oldest = pendingImportantActions.keys().next().value as
+        | string
+        | undefined;
+      if (!oldest) break;
+      pendingImportantActions.delete(oldest);
+    }
+    const now = Date.now();
+    pendingImportantActions.set(payload.action.id, {
+      action: payload.action,
+      envelope,
+      expiresAt: now + PENDING_IMPORTANT_ACTION_TTL_MS,
+    });
+  };
+
+  const sendRelayEnvelope = (
+    connection: DataConnection,
+    envelope: Envelope,
+    forwarded = false,
+  ) => {
+    if (!sendOpen(connection, envelope)) return false;
+    incrementDebugCounter(
+      forwarded ? 'relayMessagesForwarded' : 'relayMessagesSent',
+    );
+    return true;
+  };
+
+  const flushPendingImportantActions = () => {
+    purgeExpiredPendingActions();
+    if (pendingImportantActions.size === 0) return;
+    const targets = relayTargetConnections();
+    if (targets.length === 0) return;
+    for (const [id, pending] of pendingImportantActions) {
+      let sent = false;
+      for (const connection of targets)
+        sent = sendRelayEnvelope(connection, pending.envelope) || sent;
+      if (!sent) continue;
+      pendingImportantActions.delete(id);
+      incrementDebugCounter('pendingActionsRetried');
+    }
+  };
+
   const relay = (payload: RelayedMessage) => {
     const envelope: Envelope = {
       type: 'relay',
@@ -506,26 +639,38 @@ export const createScrumPokerNetwork = ({
       payload,
     };
     rememberSeen(envelope.id);
-    for (const connection of relayTargetConnections()) sendOpen(connection, envelope);
+    const targets = relayTargetConnections();
+    if (targets.length === 0) {
+      queueImportantAction(payload, envelope);
+      return;
+    }
+    for (const connection of targets) sendRelayEnvelope(connection, envelope);
   };
 
   const mergeState = (remoteState: RoomState, sentAt?: number) => {
+    const previousRenderKey = roomRenderKey(getState());
     const merged = mergeRoomState(getState(), remoteState, sentAt);
     setState(merged);
+    return previousRenderKey !== roomRenderKey(merged);
   };
 
   const handleRelay = (sourcePeerId: string, envelope: Envelope) => {
-    if (seenMessages.has(envelope.id)) return;
+    if (seenMessages.has(envelope.id)) {
+      incrementDebugCounter('duplicateRelayEnvelopesIgnored');
+      return;
+    }
     rememberSeen(envelope.id);
+    refreshPeerActivity(sourcePeerId);
     if (topology.cores.length === 0 || localRole() === 'core')
       for (const connection of relayTargetConnections(sourcePeerId))
-        sendOpen(connection, envelope);
-    if (envelope.payload.type === 'action')
+        sendRelayEnvelope(connection, envelope, true);
+    if (envelope.payload.type === 'action') {
+      incrementDebugCounter('actionsReceived');
+      refreshParticipantActivity(envelope.payload.action.actorId);
       onAction(envelope.payload.action, false);
-    else {
+    } else {
       rememberParticipant(envelope.payload.participant);
-      onPresence(envelope.payload);
-      updateTopologyIfCoordinator();
+      if (onPresence(envelope.payload)) updateTopologyIfCoordinator();
     }
   };
 
@@ -665,6 +810,7 @@ export const createScrumPokerNetwork = ({
       handleRelay(connection.peer, message);
       return;
     }
+    refreshPeerActivity(connection.peer);
     if (message.type === 'ping') {
       sendOpen(connection, { type: 'pong', sentAt: message.sentAt });
       return;
@@ -689,8 +835,7 @@ export const createScrumPokerNetwork = ({
       return;
     }
     if (message.type === 'snapshot') {
-      mergeState(message.state, message.sentAt);
-      render();
+      if (mergeState(message.state, message.sentAt)) render();
       return;
     }
     if (message.type === 'topology') {
@@ -704,15 +849,19 @@ export const createScrumPokerNetwork = ({
     rememberParticipant(message.participant);
     const diagnostic = diagnostics.get(connection.peer);
     if (diagnostic) diagnostic.participantId = message.participant.id;
-    mergeState(message.state, message.sentAt);
+    const shouldRenderMergedState = mergeState(message.state, message.sentAt);
     const state = getState();
     const player = state.players.find(
       (item) => item.id === message.participant.id,
     );
+    let shouldRenderPresence = false;
     if (player) {
+      const now = Date.now();
+      const previousStatus = presenceFor(player, now, hasOpenConnection(player));
       player.peerId = message.participant.peerId;
-      player.lastSeenAt = Date.now();
-      player.pageHidden = false;
+      player.lastSeenAt = now;
+      shouldRenderPresence =
+        previousStatus !== presenceFor(player, now, hasOpenConnection(player));
     }
     sendOpen(connection, {
       type: 'snapshot',
@@ -728,7 +877,7 @@ export const createScrumPokerNetwork = ({
     updateTopologyIfCoordinator();
     announceJoin();
     restoreLocalVote();
-    render();
+    if (shouldRenderMergedState || shouldRenderPresence) render();
   };
 
   const registerConnection = (connection: DataConnection) => {
@@ -794,6 +943,7 @@ export const createScrumPokerNetwork = ({
       publishCoreLoad();
       updateTopologyIfCoordinator();
       updateOverallConnection();
+      flushPendingImportantActions();
     });
     connection.on('data', (data) => {
       if (disposed) return;
@@ -920,6 +1070,7 @@ export const createScrumPokerNetwork = ({
       );
     pruneParticipantConnections(desiredPeerIds);
     updateOverallConnection();
+    flushPendingImportantActions();
   }
 
   function directoryMessage() {
@@ -932,8 +1083,10 @@ export const createScrumPokerNetwork = ({
 
   const broadcastDirectory = () => {
     const message = directoryMessage();
-    for (const connection of registryConnections.values())
-      sendOpen(connection, message);
+    for (const connection of registryConnections.values()) {
+      if (sendOpen(connection, message))
+        incrementDebugCounter('directoryMessagesSent');
+    }
     ensureTopologyConnections();
   };
 
@@ -1057,19 +1210,20 @@ export const createScrumPokerNetwork = ({
         type: 'discover',
         participant: getIdentity(),
       } satisfies RegistryMessage);
+      incrementDebugCounter('registryDiscoverMessagesSent');
     });
     connection.on('data', (raw) => {
       if (registryConnection !== connection) return;
       const message = raw as RegistryMessage;
       if (message.type === 'welcome') {
-        mergeState(message.state, message.sentAt);
+        const shouldRenderMergedState = mergeState(message.state, message.sentAt);
         for (const participant of message.participants)
           rememberParticipant(participant);
         acceptTopology(message.topology);
         ensureTopologyConnections();
         announceJoin();
         restoreLocalVote();
-        render();
+        if (shouldRenderMergedState) render();
       } else if (message.type === 'directory') {
         for (const participant of message.participants)
           rememberParticipant(participant);
@@ -1298,6 +1452,7 @@ export const createScrumPokerNetwork = ({
     pingResults.clear();
     coreLoads.clear();
     intentionalClosures.clear();
+    pendingImportantActions.clear();
     topology = EMPTY_TOPOLOGY;
     activeIceServers = baseIceServers();
     peerOptions = makePeerOptions(activeIceServers);
@@ -1316,28 +1471,23 @@ export const createScrumPokerNetwork = ({
     connectToRegistry,
     broadcastDirectory,
     sendRegistryDiscover: () => {
-      sendOpen(registryConnection, {
+      const sent = sendOpen(registryConnection, {
         type: 'discover',
         participant: getIdentity(),
       } satisfies RegistryMessage);
+      if (sent) incrementDebugCounter('registryDiscoverMessagesSent');
     },
     pingPeers: (sentAt: number) => {
-      for (const connection of connections.values())
-        sendOpen(connection, {
+      for (const connection of connections.values()) {
+        if (sendOpen(connection, {
           type: 'ping',
           sentAt,
-        } satisfies DirectMessage);
+        } satisfies DirectMessage))
+          incrementDebugCounter('pingMessagesSent');
+      }
     },
-    hasOpenConnection: (player: Player) => {
-      if (player.id === getLocalPlayerId()) return true;
-      const peerId = [...connectionParticipants.entries()].find(
-        ([, participantId]) => participantId === player.id,
-      )?.[0];
-      if (peerId && connections.get(peerId)?.open === true) return true;
-      return connectedCoreIds().length > 0;
-    },
+    hasOpenConnection,
     diagnostics: () => diagnostics,
-    heartbeatIntervalMs: HEARTBEAT_INTERVAL_MS,
     getNetworkConfig: () => ({
       iceTransportPolicy: peerOptions.config.iceTransportPolicy,
       iceServersCount: activeIceServers.length,

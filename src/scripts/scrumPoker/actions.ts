@@ -1,6 +1,8 @@
 import type { ScrumPokerElements } from './dom';
 import type { ScrumPokerNetwork } from './network';
 
+import { leadingThrottle } from './controls';
+import { incrementDebugCounter } from './debug';
 import {
   applyRoomAction,
   makeRandomId,
@@ -48,6 +50,8 @@ type RoomActionsContext = {
   setRevealAnimationUntil: (value: number) => void;
   setState: (state: RoomState) => void;
 };
+
+const REVEAL_ANIMATION_WINDOW_MS = 900;
 
 export const createRoomActions = (
   context: RoomActionsContext,
@@ -110,14 +114,20 @@ export const createRoomActions = (
     const nextState = applyRoomAction(state, action);
     context.setState(nextState);
     const revealStarted = !wasRevealed && nextState.revealed;
-    if (revealStarted) context.setRevealAnimationUntil(Date.now() + 450);
+    if (revealStarted) {
+      context.setRevealAnimationUntil(Date.now() + REVEAL_ANIMATION_WINDOW_MS);
+    }
     if (previousRoundId !== nextState.roundId) {
       context.setLocalVote(null);
       context.setRevealAnimationUntil(0);
       persistLocalVote();
     }
-    if (shouldRelay)
+    if (shouldRelay) {
+      if (action.type === 'vote') incrementDebugCounter('voteActionsSent');
+      if (action.type === 'reveal')
+        incrementDebugCounter('revealActionsGenerated');
       context.getNetwork().relay({ type: 'action', action });
+    }
     if (revealStarted && publishLocalVote()) return;
     context.render();
   }
@@ -175,17 +185,24 @@ export const createRoomActions = (
         );
       });
     }
-    elements.revealButton.addEventListener('click', () => {
-      context.setFocusResultAfterReveal(true);
-      dispatchAction(
-        makeAction('reveal', { roundId: context.getState().roundId }),
-      );
-    });
-    elements.resetButton.addEventListener('click', () => {
-      dispatchAction(
-        makeAction('new-round', { baseRoundId: context.getState().roundId }),
-      );
-    });
+    elements.revealButton.addEventListener(
+      'click',
+      leadingThrottle(() => {
+        if (context.getState().revealed) return;
+        context.setFocusResultAfterReveal(true);
+        dispatchAction(
+          makeAction('reveal', { roundId: context.getState().roundId }),
+        );
+      }),
+    );
+    elements.resetButton.addEventListener(
+      'click',
+      leadingThrottle(() => {
+        dispatchAction(
+          makeAction('new-round', { baseRoundId: context.getState().roundId }),
+        );
+      }),
+    );
     elements.allowVoteChangesInput.addEventListener('change', () => {
       dispatchAction(
         makeAction('voting-config', {

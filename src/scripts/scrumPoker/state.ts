@@ -16,6 +16,8 @@ export type Player = {
   voteRoundId: string;
   lastSeenAt: number;
   pageHidden: boolean;
+  pageHiddenAt?: number;
+  presenceSentAt?: number;
   removed: boolean;
   clocks: {
     membership: Clock;
@@ -124,6 +126,7 @@ export const MIN_TIMER_SECONDS = 10;
 export const MAX_TIMER_SECONDS = 60 * 60;
 export const PRESENCE_AWAY_MS = 30_000;
 export const PRESENCE_TIMEOUT_MS = 10 * 60_000;
+const PAGE_HIDDEN_AWAY_GRACE_MS = Math.min(5000, PRESENCE_AWAY_MS);
 
 export const freshRoomState = (): RoomState => ({
   players: [],
@@ -172,6 +175,8 @@ const playerTemplate = (
   voteRoundId: '',
   lastSeenAt: now,
   pageHidden: false,
+  pageHiddenAt: undefined,
+  presenceSentAt: undefined,
   removed: false,
   clocks: { membership: clock, name: clock, vote: ZERO_CLOCK },
 });
@@ -215,6 +220,7 @@ const applyJoinAction = (
             name: name || player.name,
             lastSeenAt: now,
             pageHidden: false,
+            pageHiddenAt: undefined,
             removed: false,
             clocks: {
               ...player.clocks,
@@ -320,6 +326,12 @@ const applyRevealAction = (
     !newer(clock, state.clocks.reveal)
   )
     return state;
+  if (state.revealed)
+    return {
+      ...state,
+      timerEndsAt: null,
+      clocks: { ...state.clocks, reveal: clock, timer: clock },
+    };
   return {
     ...state,
     revealed: true,
@@ -434,6 +446,8 @@ const mergePlayer = (local: Player | undefined, remote: Player): Player => {
           removed: remote.removed,
           lastSeenAt: remote.lastSeenAt,
           pageHidden: remote.pageHidden,
+          pageHiddenAt: remote.pageHiddenAt,
+          presenceSentAt: remote.presenceSentAt,
         }
       : {}),
     ...(name ? { name: remote.name } : {}),
@@ -521,7 +535,13 @@ export const presenceFor = (
 ): PresenceState => {
   const age = Math.max(0, now - player.lastSeenAt);
   if (age >= PRESENCE_TIMEOUT_MS || player.removed) return 'disconnected';
-  if (player.pageHidden || age >= PRESENCE_AWAY_MS) return 'away';
+  if (player.pageHidden) {
+    const hiddenAge = Math.max(
+      0,
+      now - (player.pageHiddenAt ?? player.lastSeenAt),
+    );
+    if (hiddenAge >= PAGE_HIDDEN_AWAY_GRACE_MS) return 'away';
+  }
   if (!hasOpenConnection && age > 5000) return 'reconnecting';
   return 'connected';
 };

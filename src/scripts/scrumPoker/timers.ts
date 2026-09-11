@@ -1,6 +1,7 @@
 import type { RoomActions } from './actions';
 import type { ScrumPokerElements } from './dom';
 
+import { leadingThrottle } from './controls';
 import { updateTimerDisplay } from './render';
 import {
   DEFAULT_TIMER_SECONDS,
@@ -83,7 +84,7 @@ export const createRoomTimers = ({
         updateTimerDisplay(elements, state);
         return;
       }
-      if (state.autoReveal)
+      if (state.autoReveal && !state.revealed)
         actions.dispatchAction(
           actions.makeAction('reveal', { roundId: state.roundId }),
         );
@@ -106,10 +107,14 @@ export const createRoomTimers = ({
     elements.autoRevealInput.addEventListener('change', () =>
       configureTimer(false),
     );
-    elements.startTimerButton.addEventListener('click', () =>
-      configureTimer(true),
+    elements.startTimerButton.addEventListener(
+      'click',
+      leadingThrottle(() => configureTimer(true)),
     );
-    elements.stopTimerButton.addEventListener('click', stopActiveTimer);
+    elements.stopTimerButton.addEventListener(
+      'click',
+      leadingThrottle(stopActiveTimer),
+    );
   };
 
   return {

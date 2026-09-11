@@ -22,10 +22,46 @@ declare global {
       showNetworkConfig: () => void;
       showConnectionMode: () => void;
       showQualityReport: () => void;
+      showCounters: () => void;
+      resetCounters: () => void;
       testConnection: () => void;
     } | undefined
 }
 /* eslint-enable no-unused-vars */
+
+const DEBUG_COUNTER_NAMES = [
+  'relayMessagesSent',
+  'relayMessagesForwarded',
+  'presenceMessagesSent',
+  'registryDiscoverMessagesSent',
+  'directoryMessagesSent',
+  'pingMessagesSent',
+  'actionsReceived',
+  'duplicateRelayEnvelopesIgnored',
+  'voteActionsSent',
+  'pendingActionsRetried',
+  'presenceStaleMessagesIgnored',
+  'renderCalls',
+  'revealActionsGenerated',
+  'revealTransitionsAnimated',
+] as const;
+
+export type ScrumPokerDebugCounter = (typeof DEBUG_COUNTER_NAMES)[number];
+
+export const scrumPokerDebugCounters = Object.fromEntries(
+  DEBUG_COUNTER_NAMES.map((name) => [name, 0]),
+) as Record<ScrumPokerDebugCounter, number>;
+
+export const incrementDebugCounter = (
+  name: ScrumPokerDebugCounter,
+  amount = 1,
+) => {
+  scrumPokerDebugCounters[name] += amount;
+};
+
+export const resetDebugCounters = () => {
+  for (const name of DEBUG_COUNTER_NAMES) scrumPokerDebugCounters[name] = 0;
+};
 
 const getLatencyStatus = (latency: number) => {
   if (latency < 200) return 'Good';
@@ -116,6 +152,14 @@ export const enableDebugApi = ({
         {
           command: 'scrumPoker.showQualityReport()',
           description: 'Show overall connection quality report and recommendations.',
+        },
+        {
+          command: 'scrumPoker.showCounters()',
+          description: 'Show Scrum Poker network/render counters.',
+        },
+        {
+          command: 'scrumPoker.resetCounters()',
+          description: 'Reset Scrum Poker network/render counters.',
         },
       ]),
     showParticipants: () => {
@@ -355,6 +399,13 @@ export const enableDebugApi = ({
       if (qualityCounts.excellent + qualityCounts.good > connections.length * 0.7) {
         console.log('✅ Connection quality is good (>70% excellent/good).');
       }
+    },
+    showCounters: () => {
+      console.table(scrumPokerDebugCounters);
+    },
+    resetCounters: () => {
+      resetDebugCounters();
+      console.info('Scrum Poker debug counters reset.');
     },
     testConnection: () => {
       console.log('=== WebRTC Connection Test ===');
