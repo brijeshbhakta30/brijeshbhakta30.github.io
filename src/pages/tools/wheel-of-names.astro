@@ -97,6 +97,34 @@ import '../../styles/wheelOfNames.css';
             <small>Useful when everyone should be picked once.</small>
           </span>
         </label>
+
+        <label class="wheel-checkbox">
+          <input data-rotate-pointer type="checkbox" />
+          <span>
+            <strong>Rotate pointer around wheel</strong>
+            <small
+              >Spin the pointer in the opposite direction for extra chaos.</small
+            >
+          </span>
+        </label>
+
+        <label class="wheel-field" for="wheel-entry-multiplier">
+          <span>
+            <strong>Multiply entries</strong>
+            <small>Add extra slices for every entry.</small>
+          </span>
+          <select
+            id="wheel-entry-multiplier"
+            data-entry-multiplier
+            class="wheel-select"
+          >
+            <option value="1">1×</option>
+            <option value="2">2×</option>
+            <option value="3">3×</option>
+            <option value="4">4×</option>
+            <option value="5">5×</option>
+          </select>
+        </label>
       </aside>
     </main>
 

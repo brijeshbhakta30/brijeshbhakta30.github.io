@@ -9,10 +9,14 @@ export const DEFAULT_ENTRIES = [
 
 export const MAX_ENTRIES = 200;
 export const MAX_ENTRY_LENGTH = 80;
+export const DEFAULT_ENTRY_MULTIPLIER = 1;
+export const MAX_ENTRY_MULTIPLIER = 5;
 
 export type WheelState = {
   entries: string[];
+  entryMultiplier: number;
   removeWinner: boolean;
+  rotatePointer: boolean;
 };
 
 const HTML_ENTITIES: Record<string, string> = {
@@ -32,6 +36,43 @@ export function parseEntries(value: string): string[] {
 
 export function serializeEntries(entries: string[]): string {
   return entries.join('\n');
+}
+
+export function normalizeEntryMultiplier(value = DEFAULT_ENTRY_MULTIPLIER): number {
+  if (!Number.isInteger(value)) return DEFAULT_ENTRY_MULTIPLIER;
+
+  return Math.min(
+    MAX_ENTRY_MULTIPLIER,
+    Math.max(DEFAULT_ENTRY_MULTIPLIER, value),
+  );
+}
+
+export function multipliedEntries(
+  entries: readonly string[],
+  multiplier: number,
+): string[] {
+  const normalizedMultiplier = normalizeEntryMultiplier(multiplier);
+  const multiplied: string[] = [];
+
+  for (let index = 0; index < normalizedMultiplier; index += 1) {
+    multiplied.push(...entries);
+  }
+
+  return multiplied;
+}
+
+export function sourceIndexForEffectiveIndex(
+  effectiveIndex: number,
+  sourceEntryCount: number,
+): number {
+  if (!Number.isSafeInteger(effectiveIndex) || effectiveIndex < 0) {
+    throw new RangeError('effectiveIndex must be a non-negative safe integer');
+  }
+  if (!Number.isSafeInteger(sourceEntryCount) || sourceEntryCount <= 0) {
+    throw new RangeError('sourceEntryCount must be a positive safe integer');
+  }
+
+  return effectiveIndex % sourceEntryCount;
 }
 
 function decodeHtmlEntities(value: string): string {

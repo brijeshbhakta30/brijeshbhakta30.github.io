@@ -323,16 +323,50 @@ html[data-theme="dark"] .wheel-theme-dark {
 	accent-color: var(--wheel-accent);
 }
 .wheel-checkbox strong,
-.wheel-checkbox small {
+.wheel-checkbox small,
+.wheel-field strong,
+.wheel-field small {
 	display: block;
 }
-.wheel-checkbox strong {
+.wheel-checkbox strong,
+.wheel-field strong {
 	font-weight: 600;
 }
-.wheel-checkbox small {
+.wheel-checkbox small,
+.wheel-field small {
 	margin-top: 0.2rem;
 	color: var(--wheel-secondary);
 	font-size: 0.8rem;
+}
+
+.wheel-field {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 1rem;
+	margin-top: 1.5rem;
+	padding-top: 1.25rem;
+	border-top: 1px solid var(--wheel-rule);
+	font-size: 0.875rem;
+}
+
+.wheel-select {
+	min-width: 4.5rem;
+	border: 1px solid var(--wheel-rule);
+	background: var(--wheel-bg);
+	padding: 0.55rem 0.75rem;
+	color: var(--wheel-text);
+	font:
+		0.85rem/1 ui-monospace,
+		SFMono-Regular,
+		Menlo,
+		Consolas,
+		monospace;
+}
+
+.wheel-select:focus-visible {
+	border-color: var(--wheel-accent);
+	outline: none;
 }
 
 .wheel-dialog {

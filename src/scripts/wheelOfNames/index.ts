@@ -6,12 +6,16 @@ import {
 } from './geometry';
 import {
   DEFAULT_ENTRIES,
+  DEFAULT_ENTRY_MULTIPLIER,
+  multipliedEntries,
+  normalizeEntryMultiplier,
   parseEntries,
   removeEntryAt,
   secureRandomInt,
   serializeEntries,
   shuffleEntries,
   sortEntries,
+  sourceIndexForEffectiveIndex,
   type WheelState,
 } from './state';
 
@@ -19,6 +23,7 @@ const STORAGE_KEY = 'wheel-of-names:v1';
 const IDLE_ROTATION_RADIANS_PER_SECOND = 0.18;
 const WHEEL_STOP_RADIANS_PER_SECOND = 0.012;
 const POINTER_MAX_TRAVEL_PIXELS = 170;
+const POINTER_ORBIT_VELOCITY_RATIO = 0.18;
 const SPIN_RANDOM_SCALE = 1_000_000;
 const WHEEL_COLORS = [
   { fill: '#2f80a7', text: '#ffffff' },
@@ -66,6 +71,8 @@ function queryElements(root: HTMLElement) {
     clearButton: required<HTMLButtonElement>('[data-clear]'),
     pointer: required<HTMLElement>('.wheel-pointer'),
     removeWinner: required<HTMLInputElement>('[data-remove-winner]'),
+    rotatePointer: required<HTMLInputElement>('[data-rotate-pointer]'),
+    entryMultiplier: required<HTMLSelectElement>('[data-entry-multiplier]'),
     dialog: required<HTMLDialogElement>('[data-winner-dialog]'),
     winner: required<HTMLElement>('[data-winner-name]'),
     closeDialog: required<HTMLButtonElement>('[data-close-winner]'),
@@ -87,12 +94,16 @@ function loadState(): WheelState {
       : DEFAULT_ENTRIES;
     return {
       entries,
+      entryMultiplier: normalizeEntryMultiplier(stored.entryMultiplier),
       removeWinner: stored.removeWinner === true,
+      rotatePointer: stored.rotatePointer === true,
     };
   } catch {
     return {
       entries: DEFAULT_ENTRIES,
+      entryMultiplier: DEFAULT_ENTRY_MULTIPLIER,
       removeWinner: false,
+      rotatePointer: false,
     };
   }
 }
@@ -399,8 +410,12 @@ function initializeWheel(): void {
 
   const elements = queryElements(root);
   let state = loadState();
+  let effectiveEntries = multipliedEntries(
+    state.entries,
+    state.entryMultiplier,
+  );
   let rotation = POINTER_RESTING_ANGLE - Math.PI;
-  let winnerIndex: number | null = null;
+  let winnerSourceIndex: number | null = null;
   let spinFrame = 0;
   let spinMotion: SpinMotion | null = null;
   let spinLastDraw = 0;
@@ -408,9 +423,17 @@ function initializeWheel(): void {
   let idleLastDraw = 0;
   let pointerAngleOffset = 0;
   let pointerPhase = 0;
+  let reducedMotionForSpin = false;
   let spinning = false;
   const controller = new AbortController();
   const options = { signal: controller.signal };
+
+  const rebuildEffectiveEntries = () => {
+    effectiveEntries = multipliedEntries(state.entries, state.entryMultiplier);
+  };
+
+  const canSpin = () =>
+    state.entries.length >= 2 && effectiveEntries.length >= 2;
 
   const stopIdleRotation = () => {
     cancelAnimationFrame(idleFrame);
@@ -419,13 +442,7 @@ function initializeWheel(): void {
   };
 
   const startIdleRotation = () => {
-    if (
-      idleFrame ||
-      spinning ||
-      state.entries.length < 2 ||
-      elements.dialog.open
-    )
-      return;
+    if (idleFrame || spinning || !canSpin() || elements.dialog.open) return;
     if (prefersReducedMotion()) return;
 
     const animateIdle = (now: number) => {
@@ -433,7 +450,7 @@ function initializeWheel(): void {
       const elapsedSeconds = Math.min(0.05, (now - idleLastDraw) / 1000);
       idleLastDraw = now;
       rotation += IDLE_ROTATION_RADIANS_PER_SECOND * elapsedSeconds;
-      drawWheel(elements, state.entries, rotation);
+      drawWheel(elements, effectiveEntries, rotation);
       idleFrame = requestAnimationFrame(animateIdle);
     };
 
@@ -443,18 +460,15 @@ function initializeWheel(): void {
   const updateMotionState = () => {
     elements.canvas.setAttribute(
       'aria-disabled',
-      spinning || state.entries.length < 2 ? 'true' : 'false',
+      spinning || !canSpin() ? 'true' : 'false',
     );
     elements.spinButton.textContent = spinning ? 'Spinning' : 'Spin';
-    elements.canvas.classList.toggle(
-      'is-disabled',
-      spinning || state.entries.length < 2,
-    );
+    elements.canvas.classList.toggle('is-disabled', spinning || !canSpin());
     elements.canvas
       .closest('.wheel-stage')
       ?.classList.toggle('is-spinning', spinning);
 
-    if (spinning || state.entries.length < 2 || elements.dialog.open) {
+    if (spinning || !canSpin() || elements.dialog.open) {
       stopIdleRotation();
     } else {
       startIdleRotation();
@@ -463,11 +477,16 @@ function initializeWheel(): void {
 
   const render = (syncTextarea = true) => {
     if (syncTextarea) elements.entries.value = serializeEntries(state.entries);
-    elements.count.textContent = `${state.entries.length} ${state.entries.length === 1 ? 'entry' : 'entries'}`;
+    elements.count.textContent =
+      state.entryMultiplier > 1
+        ? `${state.entries.length} ${state.entries.length === 1 ? 'entry' : 'entries'} · ${effectiveEntries.length} slices`
+        : `${state.entries.length} ${state.entries.length === 1 ? 'entry' : 'entries'}`;
     elements.removeWinner.checked = state.removeWinner;
-    elements.spinButton.disabled = spinning || state.entries.length < 2;
+    elements.rotatePointer.checked = state.rotatePointer;
+    elements.entryMultiplier.value = String(state.entryMultiplier);
+    elements.spinButton.disabled = spinning || !canSpin();
     elements.emptyMessage.hidden = state.entries.length > 0;
-    drawWheel(elements, state.entries, rotation);
+    drawWheel(elements, effectiveEntries, rotation);
     saveState(state);
     updateMotionState();
   };
@@ -489,20 +508,23 @@ function initializeWheel(): void {
     const wheelRadiusPixels = wheelRadiusFor(elements.canvas);
 
     if (angularVelocity > 0) {
-      pointerPhase = normalizeAngle(
-        pointerPhase - angularVelocity * elapsedSeconds,
-      );
-      pointerAngleOffset = pointerAngleOffsetFor(
-        pointerPhase,
-        angularVelocity,
-        wheelRadiusPixels,
-      );
+      if (state.rotatePointer && !reducedMotionForSpin) {
+        pointerAngleOffset = normalizeAngle(
+          pointerAngleOffset -
+            angularVelocity * POINTER_ORBIT_VELOCITY_RATIO * elapsedSeconds,
+        );
+      } else {
+        pointerPhase = normalizeAngle(
+          pointerPhase - angularVelocity * elapsedSeconds,
+        );
+        pointerAngleOffset = pointerAngleOffsetFor(
+          pointerPhase,
+          angularVelocity,
+          wheelRadiusPixels,
+        );
+      }
 
-      applyPointerTransform(
-        elements,
-        pointerAngleOffset,
-        wheelRadiusPixels,
-      );
+      applyPointerTransform(elements, pointerAngleOffset, wheelRadiusPixels);
 
       return false;
     }
@@ -515,14 +537,15 @@ function initializeWheel(): void {
   const setEntries = (entries: string[]) => {
     if (spinning) return;
     state = { ...state, entries };
-    winnerIndex = null;
+    rebuildEffectiveEntries();
+    winnerSourceIndex = null;
     render();
   };
 
   const removeWinner = () => {
-    if (winnerIndex === null) return;
-    setEntries(removeEntryAt(state.entries, winnerIndex));
-    winnerIndex = null;
+    if (winnerSourceIndex === null) return;
+    setEntries(removeEntryAt(state.entries, winnerSourceIndex));
+    winnerSourceIndex = null;
     elements.dialog.close();
   };
 
@@ -530,18 +553,22 @@ function initializeWheel(): void {
     const pointerAngle = normalizeAngle(
       POINTER_RESTING_ANGLE + pointerAngleOffset,
     );
-    const selectedIndex = winningIndexForRotation(
-      state.entries.length,
+    const selectedEffectiveIndex = winningIndexForRotation(
+      effectiveEntries.length,
       rotation,
       pointerAngle,
     );
-    const winner = state.entries[selectedIndex];
+    const selectedSourceIndex = sourceIndexForEffectiveIndex(
+      selectedEffectiveIndex,
+      state.entries.length,
+    );
+    const winner = state.entries[selectedSourceIndex];
 
     rotation = normalizeAngle(rotation);
     spinning = false;
     spinMotion = null;
     spinLastDraw = 0;
-    winnerIndex = selectedIndex;
+    winnerSourceIndex = selectedSourceIndex;
     elements.winner.textContent = winner;
     elements.removeDialogWinner.hidden = state.removeWinner;
     elements.dialog.showModal();
@@ -550,20 +577,22 @@ function initializeWheel(): void {
     if (state.removeWinner) {
       state = {
         ...state,
-        entries: removeEntryAt(state.entries, selectedIndex),
+        entries: removeEntryAt(state.entries, selectedSourceIndex),
       };
-      winnerIndex = null;
+      rebuildEffectiveEntries();
+      winnerSourceIndex = null;
       elements.winner.textContent = winner;
       render();
     }
   };
 
   const spin = () => {
-    if (spinning || state.entries.length < 2) return;
+    if (spinning || !canSpin()) return;
     stopIdleRotation();
     spinning = true;
-    winnerIndex = null;
-    spinMotion = createSpinMotion(prefersReducedMotion());
+    winnerSourceIndex = null;
+    reducedMotionForSpin = prefersReducedMotion();
+    spinMotion = createSpinMotion(reducedMotionForSpin);
     spinLastDraw = performance.now();
     resetPointer();
     render();
@@ -576,7 +605,7 @@ function initializeWheel(): void {
       const wheelStopped = advanceSpinMotion(spinMotion, elapsedSeconds);
 
       rotation += spinMotion.angularVelocity * elapsedSeconds;
-      drawWheel(elements, state.entries, rotation);
+      drawWheel(elements, effectiveEntries, rotation);
       const pointerStopped = advancePointer(
         elapsedSeconds,
         spinMotion.angularVelocity,
@@ -594,7 +623,8 @@ function initializeWheel(): void {
     () => {
       if (spinning) return;
       state = { ...state, entries: parseEntries(elements.entries.value) };
-      winnerIndex = null;
+      rebuildEffectiveEntries();
+      winnerSourceIndex = null;
       render(false);
     },
     options,
@@ -609,7 +639,8 @@ function initializeWheel(): void {
       event.preventDefault();
       const parsed = insertParsedPaste(elements.entries, pastedText);
       state = { ...state, entries: parsed.entries };
-      winnerIndex = null;
+      rebuildEffectiveEntries();
+      winnerSourceIndex = null;
       render();
       elements.entries.setSelectionRange(parsed.caret, parsed.caret);
     },
@@ -641,6 +672,29 @@ function initializeWheel(): void {
     'change',
     () => {
       state = { ...state, removeWinner: elements.removeWinner.checked };
+      render();
+    },
+    options,
+  );
+  elements.rotatePointer.addEventListener(
+    'change',
+    () => {
+      state = { ...state, rotatePointer: elements.rotatePointer.checked };
+      render();
+    },
+    options,
+  );
+  elements.entryMultiplier.addEventListener(
+    'change',
+    () => {
+      state = {
+        ...state,
+        entryMultiplier: normalizeEntryMultiplier(
+          Number(elements.entryMultiplier.value),
+        ),
+      };
+      rebuildEffectiveEntries();
+      winnerSourceIndex = null;
       render();
     },
     options,
