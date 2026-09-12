@@ -1,4 +1,6 @@
 ---
+import ThemeToggle from './ThemeToggle.astro';
+
 const pathname = Astro.url.pathname;
 const links = [
   { href: '/work', label: 'Work' },
@@ -49,19 +51,6 @@ const links = [
         }
       </ul>
     </nav>
-    <button
-      class="grid size-9 shrink-0 cursor-pointer place-items-center rounded-full border border-rule bg-transparent p-0 text-foreground hover:border-accent-hover hover:text-accent-hover"
-      type="button"
-      data-theme-toggle
-      aria-label="Switch to dark mode"
-      title="Switch to dark mode"
-    >
-      <span class="text-base leading-none dark:hidden" aria-hidden="true"
-        >☾</span
-      >
-      <span class="hidden text-base leading-none dark:inline" aria-hidden="true"
-        >☀</span
-      >
-    </button>
+    <ThemeToggle />
   </div>
 </header>

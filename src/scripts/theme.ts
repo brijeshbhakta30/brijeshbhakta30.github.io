@@ -33,7 +33,7 @@ const applyTheme = () => {
   const theme = explicitTheme() ?? systemTheme();
   document.documentElement.dataset.theme = theme;
   for (const toggle of document.querySelectorAll<HTMLButtonElement>(
-    '[data-theme-toggle], [data-tool-theme-toggle]',
+    '[data-theme-toggle]',
   ))
     updateToggle(toggle, theme);
   requestAnimationFrame(updateThemeColor);
@@ -41,7 +41,7 @@ const applyTheme = () => {
 
 const bindToggles = () => {
   for (const toggle of document.querySelectorAll<HTMLButtonElement>(
-    '[data-theme-toggle], [data-tool-theme-toggle]',
+    '[data-theme-toggle]',
   )) {
     if (toggle.dataset.themeReady === 'true') continue;
     toggle.dataset.themeReady = 'true';

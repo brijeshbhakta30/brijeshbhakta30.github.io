@@ -77,35 +77,6 @@ html[data-theme="dark"] .wheel-tool {
 	letter-spacing: 0.12em;
 }
 
-.wheel-icon-button {
-	display: grid;
-	width: 2.25rem;
-	height: 2.25rem;
-	flex: 0 0 auto;
-	cursor: pointer;
-	place-items: center;
-	border: 1px solid var(--wheel-rule);
-	border-radius: 50%;
-	background: transparent;
-	color: var(--wheel-text);
-	font-size: 1rem;
-}
-
-.wheel-icon-button:hover,
-.wheel-icon-button:focus-visible {
-	border-color: var(--wheel-accent-hover);
-	color: var(--wheel-accent-hover);
-}
-.wheel-theme-dark {
-	display: none;
-}
-html[data-theme="dark"] .wheel-theme-light {
-	display: none;
-}
-html[data-theme="dark"] .wheel-theme-dark {
-	display: inline;
-}
-
 .wheel-layout {
 	display: grid;
 	grid-template-columns: minmax(0, 1.35fr) minmax(18rem, 0.65fr);

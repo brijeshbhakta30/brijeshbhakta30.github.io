@@ -1,43 +1,30 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import Eyebrow from '../components/Eyebrow.astro';
+import FeatureGrid from '../components/FeatureGrid.astro';
+import FeatureItem from '../components/FeatureItem.astro';
+import Notice from '../components/Notice.astro';
+import PageHeader from '../components/PageHeader.astro';
+import TextLink from '../components/TextLink.astro';
 ---
 
 <BaseLayout
   title="Resume"
   description="Resume and professional summary for software engineer Brijesh Bhakta."
 >
-  <header
-    class="border-b border-rule pt-[clamp(4.5rem,9vw,9rem)] pb-[clamp(3rem,6vw,6rem)]"
-  >
-    <p
-      class="mb-5 font-mono text-base font-semibold tracking-[0.12em] text-accent uppercase before:content-['//_']"
-    >
-      Resume
-    </p>
-    <h1
-      class="mb-8 max-w-[980px] font-serif text-[clamp(3.4rem,7vw,7rem)] leading-[0.98] font-normal tracking-[-0.035em]"
-    >
-      A decade across product engineering.
-    </h1>
-    <p
-      class="max-w-[720px] text-[clamp(1.2rem,2vw,1.55rem)] leading-normal text-secondary"
-    >
-      Backend services, web applications, and mobile product infrastructure,
-      grounded in a Computer Science Engineering education.
-    </p>
-  </header>
+  <PageHeader
+    eyebrow="Resume"
+    title="A decade across product engineering."
+    description="Backend services, web applications, and mobile product infrastructure, grounded in a Computer Science Engineering education."
+  />
   <section
     class="grid grid-cols-[1fr_2fr] gap-8 border-b border-rule py-[clamp(5rem,10vw,10rem)] max-mobile:grid-cols-1"
   >
     <div>
-      <p
-        class="mb-5 font-mono text-base font-semibold tracking-[0.12em] text-accent uppercase before:content-['//_']"
-      >
-        Resume archive
-      </p>
-      <p class="border-l-[3px] border-accent bg-surface px-6 py-5">
+      <Eyebrow>Resume archive</Eyebrow>
+      <Notice>
         This PDF may not reflect my latest experience. Please get in touch for the most up-to-date version.
-      </p>
+      </Notice>
     </div>
     <div class="max-w-[760px]">
       <h2
@@ -50,37 +37,27 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       >
         Download my five-page resume for details on my education, earlier experience, technical skills, and projects.
       </p>
-      <a
-        class="font-mono text-[0.8rem] font-semibold tracking-[0.06em] text-accent uppercase"
-        href="/resume.pdf"
-        download>Download resume ↓</a
-      >
+      <TextLink href="/resume.pdf" download accent>Download resume ↓</TextLink>
     </div>
   </section>
   <section class="border-b border-rule py-[clamp(5rem,10vw,10rem)]">
-    <p
-      class="mb-5 font-mono text-base font-semibold tracking-[0.12em] text-accent uppercase before:content-['//_']"
-    >
-      At a glance
-    </p>
-    <div
-      class="grid grid-cols-3 gap-12 max-mobile:grid-cols-1 [&_h3]:font-serif [&_h3]:text-[1.7rem] [&_h3]:font-normal [&_p]:text-secondary"
-    >
-      <article>
-        <h3>Experience</h3><p>
+    <Eyebrow>At a glance</Eyebrow>
+    <FeatureGrid>
+      <FeatureItem title="Experience">
+        <p>
           Building software professionally since 2016, across product, platform, and application development.
         </p>
-      </article>
-      <article>
-        <h3>Range</h3><p>
+      </FeatureItem>
+      <FeatureItem title="Range">
+        <p>
           Experience across Node.js, React, React Native, Java, Python, PHP, Angular, relational databases, MongoDB and DynamoDB.
         </p>
-      </article>
-      <article>
-        <h3>Education</h3><p>
+      </FeatureItem>
+      <FeatureItem title="Education">
+        <p>
           B.Tech in Computer Science Engineering from Uka Tarsadia University, 2016.
         </p>
-      </article>
-    </div>
+      </FeatureItem>
+    </FeatureGrid>
   </section>
 </BaseLayout>

@@ -1,0 +1,28 @@
+---
+import type { HTMLAttributes } from 'astro/types';
+import IconButton from './IconButton.astro';
+
+interface Props extends HTMLAttributes<'button'> {
+  class?: string;
+}
+
+const {
+  class: className,
+  'aria-label': ariaLabel = 'Switch to dark mode',
+  title = 'Switch to dark mode',
+  ...attrs
+} = Astro.props;
+---
+
+<IconButton
+  {...attrs}
+  data-theme-toggle
+  aria-label={ariaLabel}
+  title={title}
+  class={className}
+>
+  <span class="text-base leading-none dark:hidden" aria-hidden="true">☾</span>
+  <span class="hidden text-base leading-none dark:inline" aria-hidden="true"
+    >☀</span
+  >
+</IconButton>

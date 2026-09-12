@@ -1,0 +1,65 @@
+---
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+  description: string;
+  image?: string;
+  article?: boolean;
+}
+
+const { title, description, image, article = false } = Astro.props;
+const canonical = new URL(Astro.url.pathname, Astro.site);
+const pageTitle =
+  title === 'Brijesh Bhakta' ? title : `${title} — Brijesh Bhakta`;
+const socialImage = image ? new URL(image, Astro.site) : undefined;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="generator" content={Astro.generator} />
+    <meta name="theme-color" content="#F3F0E8" />
+    <script is:inline>
+      (() => {
+        let theme = 'light';
+        try {
+          const saved = localStorage.getItem('theme');
+          theme =
+            saved === 'light' || saved === 'dark'
+              ? saved
+              : (matchMedia('(prefers-color-scheme: dark)').matches
+          ? 'dark'
+          : 'light');
+        } catch {
+          theme = matchMedia('(prefers-color-scheme: dark)').matches
+            ? 'dark'
+            : 'light';
+        }
+        document.documentElement.dataset.theme = theme;
+      })();
+    </script>
+    <slot name="head" />
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta property="og:type" content={article ? 'article' : 'website'} />
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    {socialImage && <meta property="og:image" content={socialImage} />}
+    <meta property="og:site_name" content="Brijesh Bhakta" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:creator" content="@brijeshbhakta30" />
+    <meta name="twitter:title" content={pageTitle} />
+    <meta name="twitter:description" content={description} />
+    <title>{pageTitle}</title>
+  </head>
+  <body>
+    <slot />
+    <slot name="body-end" />
+    <script src="../scripts/theme.ts"></script>
+  </body>
+</html>

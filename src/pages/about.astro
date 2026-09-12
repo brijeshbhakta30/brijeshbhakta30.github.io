@@ -1,5 +1,9 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import Eyebrow from '../components/Eyebrow.astro';
+import FeatureGrid from '../components/FeatureGrid.astro';
+import FeatureItem from '../components/FeatureItem.astro';
+import PageHeader from '../components/PageHeader.astro';
 import portrait from '../assets/brijesh.jpg';
 ---
 
@@ -8,20 +12,7 @@ import portrait from '../assets/brijesh.jpg';
   description="About Brijesh Bhakta, a software engineer with 10 years of experience across backend, web, and mobile development."
   image={portrait.src}
 >
-  <header
-    class="border-b border-rule pt-[clamp(4.5rem,9vw,9rem)] pb-[clamp(3rem,6vw,6rem)]"
-  >
-    <p
-      class="mb-5 font-mono text-base font-semibold tracking-[0.12em] text-accent uppercase before:content-['//_']"
-    >
-      About
-    </p>
-    <h1
-      class="mb-8 max-w-[980px] font-serif text-[clamp(3.4rem,7vw,7rem)] leading-[0.98] font-normal tracking-[-0.035em]"
-    >
-      Wide perspective. Careful execution.
-    </h1>
-  </header>
+  <PageHeader eyebrow="About" title="Wide perspective. Careful execution." />
   <section
     class="grid grid-cols-[minmax(240px,0.8fr)_2fr] items-start gap-[clamp(2.5rem,7vw,8rem)] border-b border-rule py-[clamp(5rem,10vw,10rem)] max-mobile:grid-cols-1"
   >
@@ -50,32 +41,23 @@ import portrait from '../assets/brijesh.jpg';
     </div>
   </section>
   <section class="border-b border-rule py-[clamp(5rem,10vw,10rem)]">
-    <p
-      class="mb-5 font-mono text-base font-semibold tracking-[0.12em] text-accent uppercase before:content-['//_']"
-    >
-      Working approach
-    </p>
-    <div
-      class="grid grid-cols-3 gap-12 max-mobile:grid-cols-1 [&_h3]:font-serif [&_h3]:text-[1.7rem] [&_h3]:font-normal [&_p]:text-secondary"
-    >
-      <article>
-        <h3>Understand the whole</h3>
+    <Eyebrow>Working approach</Eyebrow>
+    <FeatureGrid>
+      <FeatureItem title="Understand the whole">
         <p>
           Good technical choices start with the user, the constraints, and the surrounding system, not with a preferred technology.
         </p>
-      </article>
-      <article>
-        <h3>Make complexity legible</h3>
+      </FeatureItem>
+      <FeatureItem title="Make complexity legible">
         <p>
           Clear boundaries, direct communication, and maintainable code make products easier to operate and evolve.
         </p>
-      </article>
-      <article>
-        <h3>Keep learning practical</h3>
+      </FeatureItem>
+      <FeatureItem title="Keep learning practical">
         <p>
           New technology matters when it improves the product, the engineering experience, or the reliability of the system, not simply because it is new.
         </p>
-      </article>
-    </div>
+      </FeatureItem>
+    </FeatureGrid>
   </section>
 </BaseLayout>

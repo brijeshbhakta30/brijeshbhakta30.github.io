@@ -1,0 +1,60 @@
+---
+import type { WritingPost } from '../data/writing';
+import DraftBadge from './DraftBadge.astro';
+import TagList from './TagList.astro';
+
+interface Props {
+  post: WritingPost;
+  variant?: 'default' | 'compact';
+}
+
+const { post, variant = 'default' } = Astro.props;
+const isCompact = variant === 'compact';
+const formatDate = (date: Date) =>
+  new Intl.DateTimeFormat('en', {
+    ...(isCompact ? {} : { day: '2-digit' as const }),
+    month: 'short',
+    year: 'numeric',
+  }).format(date);
+---
+
+<a
+  class="grid grid-cols-[1fr_3fr_1.5fr] items-baseline gap-8 border-t border-rule py-8 no-underline max-mobile:grid-cols-[1fr_auto] max-mobile:gap-x-4 max-mobile:gap-y-2"
+  href={post.data.permalink}
+>
+  <time
+    class="font-mono text-base tracking-[0.06em] uppercase"
+    datetime={post.data.publishedAt.toISOString()}
+  >
+    {formatDate(post.data.publishedAt)}
+  </time>
+  <div class:list={[isCompact && 'max-mobile:col-span-full']}>
+    {post.data.draft && <DraftBadge />}
+    <h3
+      class="mt-2 mb-0 font-serif text-[clamp(1.7rem,3vw,2.8rem)] leading-[1.2] font-normal"
+    >
+      {post.data.title}
+    </h3>
+    {
+      !isCompact && (
+        <>
+          <p class="mt-[0.84rem] mb-0 text-secondary">
+            {post.data.description}
+          </p>
+          <TagList
+            tags={post.data.tags}
+            label={`Topics for ${post.data.title}`}
+          />
+        </>
+      )
+    }
+  </div>
+  <span
+    class:list={[
+      'font-mono text-base tracking-[0.06em] uppercase max-mobile:col-start-2 max-mobile:row-start-1',
+      !isCompact && 'justify-self-end',
+    ]}
+  >
+    {post.data.category} ↗
+  </span>
+</a>

@@ -1,5 +1,8 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import Notice from '../components/Notice.astro';
+import PageHeader from '../components/PageHeader.astro';
+import ProjectRow from '../components/ProjectRow.astro';
 import { projects } from '../data/work';
 
 ---
@@ -8,47 +11,21 @@ import { projects } from '../data/work';
   title="Work"
   description="Selected backend, web, and mobile product work from Brijesh Bhakta's portfolio."
 >
-  <header
-    class="border-b border-rule pt-[clamp(4.5rem,9vw,9rem)] pb-[clamp(3rem,6vw,6rem)]"
-  >
-    <p
-      class="mb-5 font-mono text-base font-semibold tracking-[0.12em] text-accent uppercase before:content-['//_']"
-    >
-      Selected work
-    </p>
-    <h1
-      class="mb-8 max-w-[980px] font-serif text-[clamp(3.4rem,7vw,7rem)] leading-[0.98] font-normal tracking-[-0.035em]"
-    >
-      Engineering across systems and screens.
-    </h1>
-    <p
-      class="max-w-[720px] text-[clamp(1.2rem,2vw,1.55rem)] leading-normal text-secondary"
-    >
-      A selection of product work across backend systems, web applications, and mobile products.
-    </p>
-  </header>
+  <PageHeader
+    eyebrow="Selected work"
+    title="Engineering across systems and screens."
+    description="A selection of product work across backend systems, web applications, and mobile products."
+  />
   <section
     class="border-b border-rule py-[clamp(5rem,10vw,10rem)]"
     aria-label="Project archive"
   >
-    <p class="border-l-[3px] border-accent bg-surface px-6 py-5">
+    <Notice>
       <strong>Archive note:</strong> These summaries cover work across different stages of my career. Client and employer names are intentionally omitted.
-    </p>
+    </Notice>
     <div class="mt-16 border-t border-rule">
       {
-        projects.map((project) => (
-          <article class="grid grid-cols-[1fr_2fr_2fr] gap-8 border-b border-rule py-8 max-mobile:grid-cols-1 max-mobile:gap-3">
-            <p class="m-0 font-mono text-sm tracking-[0.06em] uppercase">
-              {project.area}
-              <br />
-              {project.tech}
-            </p>
-            <h3 class="m-0 font-serif text-[clamp(1.6rem,3vw,2.7rem)] font-normal leading-[1.2]">
-              {project.title}
-            </h3>
-            <p class="m-0 text-secondary">{project.description}</p>
-          </article>
-        ))
+        projects.map((project) => <ProjectRow project={project} />)
       }
     </div>
   </section>

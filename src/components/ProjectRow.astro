@@ -1,0 +1,25 @@
+---
+import type { ProjectItem } from '../data/work';
+
+interface Props {
+  project: ProjectItem;
+}
+
+const { project } = Astro.props;
+---
+
+<article
+  class="grid grid-cols-[1fr_2fr_2fr] gap-8 border-b border-rule py-8 max-mobile:grid-cols-1 max-mobile:gap-3"
+>
+  <p class="m-0 font-mono text-sm tracking-[0.06em] uppercase">
+    {project.area}
+    <br />
+    {project.tech}
+  </p>
+  <h3
+    class="m-0 font-serif text-[clamp(1.6rem,3vw,2.7rem)] leading-[1.2] font-normal"
+  >
+    {project.title}
+  </h3>
+  <p class="m-0 text-secondary">{project.description}</p>
+</article>

@@ -451,6 +451,17 @@ function initializeWheel(): void {
       idleLastDraw = now;
       rotation += IDLE_ROTATION_RADIANS_PER_SECOND * elapsedSeconds;
       drawWheel(elements, effectiveEntries, rotation);
+      if (state.rotatePointer) {
+        pointerAngleOffset = normalizeAngle(
+          pointerAngleOffset -
+            IDLE_ROTATION_RADIANS_PER_SECOND * elapsedSeconds,
+        );
+        applyPointerTransform(
+          elements,
+          pointerAngleOffset,
+          wheelRadiusFor(elements.canvas),
+        );
+      }
       idleFrame = requestAnimationFrame(animateIdle);
     };
 
@@ -483,6 +494,7 @@ function initializeWheel(): void {
         : `${state.entries.length} ${state.entries.length === 1 ? 'entry' : 'entries'}`;
     elements.removeWinner.checked = state.removeWinner;
     elements.rotatePointer.checked = state.rotatePointer;
+    elements.rotatePointer.disabled = spinning;
     elements.entryMultiplier.value = String(state.entryMultiplier);
     elements.spinButton.disabled = spinning || !canSpin();
     elements.emptyMessage.hidden = state.entries.length > 0;
@@ -491,8 +503,8 @@ function initializeWheel(): void {
     updateMotionState();
   };
 
-  const resetPointer = () => {
-    pointerAngleOffset = 0;
+  const resetPointer = (preserveAngleOffset = false) => {
+    if (!preserveAngleOffset) pointerAngleOffset = 0;
     pointerPhase = 0;
     applyPointerTransform(
       elements,
@@ -594,7 +606,7 @@ function initializeWheel(): void {
     reducedMotionForSpin = prefersReducedMotion();
     spinMotion = createSpinMotion(reducedMotionForSpin);
     spinLastDraw = performance.now();
-    resetPointer();
+    resetPointer(state.rotatePointer && !reducedMotionForSpin);
     render();
 
     const animate = (now: number) => {
@@ -680,6 +692,7 @@ function initializeWheel(): void {
     'change',
     () => {
       state = { ...state, rotatePointer: elements.rotatePointer.checked };
+      resetPointer();
       render();
     },
     options,

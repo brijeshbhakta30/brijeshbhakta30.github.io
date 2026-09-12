@@ -1,4 +1,5 @@
 ---
+import ThemeToggle from '../../components/ThemeToggle.astro';
 import ToolLayout from '../../layouts/ToolLayout.astro';
 
 import '../../styles/wheelOfNames.css';
@@ -14,16 +15,7 @@ import '../../styles/wheelOfNames.css';
         <p class="wheel-kicker">Wheel of Names</p>
         <h1>Let the wheel decide.</h1>
       </div>
-      <button
-        class="wheel-icon-button"
-        type="button"
-        data-tool-theme-toggle
-        aria-label="Switch color theme"
-        title="Switch color theme"
-      >
-        <span class="wheel-theme-light" aria-hidden="true">☾</span>
-        <span class="wheel-theme-dark" aria-hidden="true">☀</span>
-      </button>
+      <ThemeToggle />
     </header>
 
     <main class="wheel-layout">

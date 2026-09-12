@@ -1,4 +1,6 @@
 ---
+import IconButton from '../../components/IconButton.astro';
+import ThemeToggle from '../../components/ThemeToggle.astro';
 import ToolLayout from '../../layouts/ToolLayout.astro';
 import '../../styles/scrumPoker.css';
 
@@ -25,10 +27,8 @@ const cards = ['0', '1', '2', '3', '5', '8', '13', '21', '?', '☕'];
           </h1>
         </div>
         <div class="flex items-center justify-end gap-4">
-          <button
+          <IconButton
             id="profile-button"
-            class="grid size-9 shrink-0 cursor-pointer place-items-center rounded-full border border-rule bg-transparent p-0 text-foreground hover:border-accent-hover hover:text-accent-hover"
-            type="button"
             aria-label="Open profile settings"
             title="Profile settings"
           >
@@ -43,22 +43,8 @@ const cards = ['0', '1', '2', '3', '5', '8', '13', '21', '?', '☕'];
               <circle cx="12" cy="8" r="3.25"></circle>
               <path d="M5.5 19c.7-3.2 3-5 6.5-5s5.8 1.8 6.5 5"></path>
             </svg>
-          </button>
-          <button
-            class="grid size-9 shrink-0 cursor-pointer place-items-center rounded-full border border-rule bg-transparent p-0 text-foreground hover:border-accent-hover hover:text-accent-hover"
-            type="button"
-            data-tool-theme-toggle
-            aria-label="Switch to dark mode"
-            title="Switch to dark mode"
-          >
-            <span class="text-base leading-none dark:hidden" aria-hidden="true"
-              >☾</span
-            >
-            <span
-              class="hidden text-base leading-none dark:inline"
-              aria-hidden="true">☀</span
-            >
-          </button>
+          </IconButton>
+          <ThemeToggle />
         </div>
       </div>
     </header>

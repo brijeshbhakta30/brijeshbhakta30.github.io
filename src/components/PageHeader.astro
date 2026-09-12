@@ -1,0 +1,35 @@
+---
+import Eyebrow from './Eyebrow.astro';
+
+interface Props {
+  eyebrow: string;
+  title: string;
+  description?: string;
+  class?: string;
+}
+
+const { eyebrow, title, description, class: className } = Astro.props;
+---
+
+<header
+  class:list={[
+    'border-b border-rule pt-[clamp(4.5rem,9vw,9rem)] pb-[clamp(3rem,6vw,6rem)]',
+    className,
+  ]}
+>
+  <slot name="before" />
+  <Eyebrow>{eyebrow}</Eyebrow>
+  <h1
+    class="mb-8 max-w-[980px] font-serif text-[clamp(3.4rem,7vw,7rem)] leading-[0.98] font-normal tracking-[-0.035em]"
+  >
+    {title}
+  </h1>
+  {
+    description && (
+      <p class="max-w-[720px] text-[clamp(1.2rem,2vw,1.55rem)] leading-normal text-secondary">
+        {description}
+      </p>
+    )
+  }
+  <slot />
+</header>

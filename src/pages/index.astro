@@ -1,15 +1,14 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-import DraftBadge from '../components/DraftBadge.astro';
+import Eyebrow from '../components/Eyebrow.astro';
+import ProjectRow from '../components/ProjectRow.astro';
 import SectionTitle from '../components/SectionTitle.astro';
+import TextLink from '../components/TextLink.astro';
+import WritingRow from '../components/WritingRow.astro';
 import { getWritingPosts } from '../data/writing';
 import { featuredProjects } from '../data/work';
 
 const posts = await getWritingPosts();
-const formatDate = (date: Date) =>
-  new Intl.DateTimeFormat('en', { month: 'short', year: 'numeric' }).format(
-    date,
-  );
 ---
 
 <BaseLayout
@@ -21,11 +20,7 @@ const formatDate = (date: Date) =>
     aria-labelledby="hero-title"
   >
     <div>
-      <p
-        class="mb-5 font-mono text-base font-semibold tracking-[0.12em] text-accent uppercase before:content-['//_']"
-      >
-        Software engineer · Building since 2016
-      </p>
+      <Eyebrow>Software engineer · Building since 2016</Eyebrow>
       <h1
         class="mb-8 max-w-[1100px] font-serif text-[clamp(3.6rem,8.5vw,8.7rem)] leading-[0.98] font-normal tracking-[-0.035em] [&_em]:text-accent"
         id="hero-title"
@@ -47,9 +42,9 @@ const formatDate = (date: Date) =>
       >
         I build dependable software across backend systems, web interfaces, and mobile applications. I bring the whole product into view, not just one slice of the stack.
       </p>
-      <a
-        class="justify-self-end font-mono text-[0.8rem] uppercase max-mobile:hidden"
-        href="#selected-work">Selected work ↓</a
+      <TextLink
+        class="justify-self-end max-mobile:hidden"
+        href="#selected-work">Selected work ↓</TextLink
       >
     </div>
   </section>
@@ -116,21 +111,7 @@ const formatDate = (date: Date) =>
     />
     <div class="border-t border-rule">
       {
-        featuredProjects.map((project) => (
-          <article class="grid grid-cols-[1fr_2fr_2fr] gap-8 border-b border-rule py-8 max-mobile:grid-cols-1 max-mobile:gap-3">
-            <p class="m-0 font-mono text-sm tracking-[0.06em] uppercase">
-              {project.area}
-              <br />
-              {project.tech}
-            </p>
-            <h3 class="m-0 font-serif text-[clamp(1.6rem,3vw,2.7rem)] font-normal leading-[1.2]">
-              {project.title}
-            </h3>
-            <p class="m-0 text-secondary">
-              {project.description}
-            </p>
-          </article>
-        ))
+        featuredProjects.map((project) => <ProjectRow project={project} />)
       }
     </div>
   </section>
@@ -147,28 +128,9 @@ const formatDate = (date: Date) =>
     />
     <div>
       {
-        posts.slice(0, 3).map((post) => (
-          <a
-            class="grid grid-cols-[1fr_3fr_1.5fr] items-baseline gap-8 border-t border-rule py-8 no-underline max-mobile:grid-cols-[1fr_auto] max-mobile:gap-x-4 max-mobile:gap-y-2"
-            href={post.data.permalink}
-          >
-            <time
-              class="font-mono text-base tracking-[0.06em] uppercase"
-              datetime={post.data.publishedAt.toISOString()}
-            >
-              {formatDate(post.data.publishedAt)}
-            </time>
-            <div class="max-mobile:col-span-full">
-              {post.data.draft && <DraftBadge />}
-              <h3 class="mt-2 mb-0 font-serif text-[clamp(1.7rem,3vw,2.8rem)] font-normal leading-[1.2]">
-                {post.data.title}
-              </h3>
-            </div>
-            <span class="font-mono text-base tracking-[0.06em] uppercase max-mobile:col-start-2 max-mobile:row-start-1">
-              {post.data.category} ↗
-            </span>
-          </a>
-        ))
+        posts
+          .slice(0, 3)
+          .map((post) => <WritingRow post={post} variant="compact" />)
       }
     </div>
   </section>
@@ -177,11 +139,7 @@ const formatDate = (date: Date) =>
     class="grid grid-cols-[1fr_2fr] gap-8 border-b border-rule py-[clamp(5rem,10vw,10rem)] max-mobile:grid-cols-1"
     aria-labelledby="contact-title"
   >
-    <p
-      class="mb-5 font-mono text-base font-semibold tracking-[0.12em] text-accent uppercase before:content-['//_']"
-    >
-      Start a conversation
-    </p>
+    <Eyebrow>Start a conversation</Eyebrow>
     <div class="max-w-[760px]">
       <h2
         class="mb-8 font-serif text-[clamp(2.4rem,5vw,5rem)] leading-[0.98] font-normal tracking-[-0.035em]"
@@ -195,10 +153,12 @@ const formatDate = (date: Date) =>
         If you’re working through a difficult product or engineering challenge,
         I’d be glad to hear about it.
       </p>
-      <a
-        class="font-mono text-[0.8rem] font-semibold tracking-[0.06em] text-accent uppercase"
-        href="mailto:brijeshbhakta30@gmail.com">brijeshbhakta30@gmail.com ↗</a
+      <TextLink
+        href="mailto:brijeshbhakta30@gmail.com"
+        accent
       >
+        brijeshbhakta30@gmail.com ↗
+      </TextLink>
     </div>
   </section>
 </BaseLayout>

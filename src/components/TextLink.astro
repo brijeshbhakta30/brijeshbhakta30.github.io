@@ -1,0 +1,20 @@
+---
+import type { HTMLAttributes } from 'astro/types';
+
+interface Props extends HTMLAttributes<'a'> {
+  accent?: boolean;
+}
+
+const { accent = false, class: className, ...attrs } = Astro.props;
+---
+
+<a
+  {...attrs}
+  class:list={[
+    'inline-block font-mono text-[0.8rem] font-semibold tracking-[0.06em] uppercase transition-transform duration-200 ease-out motion-reduce:transition-none motion-reduce:hover:scale-100 hover:scale-[1.05]',
+    accent && 'text-accent',
+    className,
+  ]}
+>
+  <slot />
+</a>
