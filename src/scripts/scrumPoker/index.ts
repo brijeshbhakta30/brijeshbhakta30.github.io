@@ -42,7 +42,6 @@ const initializeScrumPoker = () => {
   let lastJoinAnnouncedAt = 0;
   let revealAnimationUntil = 0;
   let network: ScrumPokerNetwork;
-  let handleLeaveRequest: (() => void) | undefined;
 
   const setState = (nextState: RoomState) => {
     state = nextState;
@@ -132,27 +131,6 @@ const initializeScrumPoker = () => {
     getState: () => state,
   });
 
-  network = createScrumPokerNetwork({
-    getState: () => state,
-    setState,
-    getRoomCode: () => currentRoom,
-    getLocalPeerId: () => localPeerId,
-    setLocalPeerId: (peerId) => {
-      localPeerId = peerId;
-    },
-    getLocalPlayerId: () => localPlayerId,
-    getIdentity: identity,
-    onAction: actions.processAction,
-    onLeaveRequest: () => handleLeaveRequest?.(),
-    onPresence: presence.processPresence,
-    announceJoin: actions.announceJoin,
-    restoreLocalVote: actions.restoreLocalVote,
-    render,
-    setConnection,
-    showToast,
-    showError,
-  });
-
   const roomController = createRoomController({
     actions,
     elements,
@@ -200,10 +178,31 @@ const initializeScrumPoker = () => {
     showToast,
     timers,
   });
-  handleLeaveRequest = () => {
-    showToast('The room organizer asked everyone to leave');
-    roomController.returnHome();
-  };
+
+  network = createScrumPokerNetwork({
+    getState: () => state,
+    setState,
+    getRoomCode: () => currentRoom,
+    getLocalPeerId: () => localPeerId,
+    setLocalPeerId: (peerId) => {
+      localPeerId = peerId;
+    },
+    getLocalPlayerId: () => localPlayerId,
+    getIdentity: identity,
+    onAction: actions.processAction,
+    onLeaveRequest: () => {
+      showToast('The room organizer asked everyone to leave');
+      roomController.returnHome();
+    },
+    onPresence: presence.processPresence,
+    onRoomReady: () => roomController.setRoomLoading(false),
+    announceJoin: actions.announceJoin,
+    restoreLocalVote: actions.restoreLocalVote,
+    render,
+    setConnection,
+    showToast,
+    showError,
+  });
 
   const enableDebugApi = () => {
     installDebugApi({

@@ -2,6 +2,8 @@ export type ScrumPokerElements = {
   root: HTMLElement;
   setup: HTMLElement;
   roomView: HTMLElement;
+  roomLoading: HTMLElement;
+  roomContent: HTMLElement;
   createForm: HTMLFormElement;
   joinForm: HTMLFormElement;
   createName: HTMLInputElement;
@@ -54,6 +56,8 @@ export const queryScrumPokerElements = () => {
     root,
     setup: find<HTMLElement>('#poker-setup'),
     roomView: find<HTMLElement>('#poker-room'),
+    roomLoading: find<HTMLElement>('#room-loading'),
+    roomContent: find<HTMLElement>('#room-content'),
     createForm: find<HTMLFormElement>('#create-room-form'),
     joinForm: find<HTMLFormElement>('#join-room-form'),
     createName: find<HTMLInputElement>('#create-name'),
