@@ -42,6 +42,7 @@ const initializeScrumPoker = () => {
   let lastJoinAnnouncedAt = 0;
   let revealAnimationUntil = 0;
   let network: ScrumPokerNetwork;
+  let handleLeaveRequest: (() => void) | undefined;
 
   const setState = (nextState: RoomState) => {
     state = nextState;
@@ -142,6 +143,7 @@ const initializeScrumPoker = () => {
     getLocalPlayerId: () => localPlayerId,
     getIdentity: identity,
     onAction: actions.processAction,
+    onLeaveRequest: () => handleLeaveRequest?.(),
     onPresence: presence.processPresence,
     announceJoin: actions.announceJoin,
     restoreLocalVote: actions.restoreLocalVote,
@@ -198,6 +200,10 @@ const initializeScrumPoker = () => {
     showToast,
     timers,
   });
+  handleLeaveRequest = () => {
+    showToast('The room organizer asked everyone to leave');
+    roomController.returnHome();
+  };
 
   const enableDebugApi = () => {
     installDebugApi({
@@ -209,6 +215,7 @@ const initializeScrumPoker = () => {
       getNetworkConfig: network.getNetworkConfig,
       getConnectionMode: network.getConnectionMode,
       hasOpenConnection: network.hasOpenConnection,
+      requestPlayersLeave: network.requestPlayersLeave,
     });
   };
 
