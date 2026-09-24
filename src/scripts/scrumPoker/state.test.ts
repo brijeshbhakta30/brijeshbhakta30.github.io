@@ -10,6 +10,7 @@ import {
   presenceFor,
   type RoomAction,
   type RoomState,
+  timerSecondsLeft,
   votingStatusFor,
   votingStatusLabel,
 } from './state.ts';
@@ -244,6 +245,80 @@ test('timer actions preserve remaining time across clock skew', () => {
   assert.equal(next.timerEndsAt, 236_000);
 });
 
+test('auto-reveal from an old timer is rejected after a timer restart', () => {
+  const state = joined();
+  const firstTimer = action('timer', 2, 'a', {
+    roundId: state.roundId,
+    duration: 30,
+    endsAt: 30_000,
+    autoReveal: true,
+  });
+  const timed = applyRoomAction(state, firstTimer);
+  const restarted = applyRoomAction(
+    timed,
+    action('timer', 3, 'a', {
+      roundId: state.roundId,
+      duration: 30,
+      endsAt: 45_000,
+      autoReveal: true,
+    }),
+  );
+  const staleReveal = applyRoomAction(
+    restarted,
+    action('reveal', 4, 'b', {
+      roundId: state.roundId,
+      timerClock: timed.clocks.timer,
+    }),
+  );
+
+  assert.equal(staleReveal.revealed, false);
+  assert.equal(staleReveal.timerEndsAt, 45_000);
+});
+
+test('late timer restart rolls back a stale auto-reveal', () => {
+  const state = joined();
+  const timed = applyRoomAction(
+    state,
+    action('timer', 2, 'a', {
+      roundId: state.roundId,
+      duration: 30,
+      endsAt: 30_000,
+      autoReveal: true,
+    }),
+  );
+  const staleReveal = applyRoomAction(
+    timed,
+    action('reveal', 4, 'b', {
+      roundId: state.roundId,
+      timerClock: timed.clocks.timer,
+    }),
+  );
+  const restarted = withMockedNow(15_000, () =>
+    applyRoomAction(staleReveal, {
+      ...action('timer', 3, 'a', {
+        roundId: state.roundId,
+        duration: 30,
+        endsAt: 45_000,
+        autoReveal: true,
+      }),
+      sentAt: 15_000,
+    }),
+  );
+
+  assert.equal(restarted.revealed, false);
+  assert.equal(restarted.revealSourceTimer, null);
+  assert.equal(restarted.timerEndsAt, 45_000);
+  assert.equal(timerSecondsLeft(restarted, 15_000), 30);
+  assert.equal(timerSecondsLeft(restarted, 25_000), 20);
+
+  const manualReveal = applyRoomAction(
+    restarted,
+    action('reveal', 4, 'a', { roundId: state.roundId }),
+  );
+
+  assert.equal(manualReveal.revealed, true);
+});
+
 test('active timers in snapshots preserve remaining time across clock skew', () => {
   const local = joined();
   const remote = {
@@ -265,4 +340,44 @@ test('active timers in snapshots preserve remaining time across clock skew', () 
   assert.equal(merged.timerDuration, 30);
   assert.equal(merged.timerEndsAt, 236_000);
   assert.equal(merged.autoReveal, true);
+});
+
+test('timer restart snapshots roll back stale auto-reveals', () => {
+  const state = joined();
+  const timed = applyRoomAction(
+    state,
+    action('timer', 2, 'a', {
+      roundId: state.roundId,
+      duration: 30,
+      endsAt: 30_000,
+      autoReveal: true,
+    }),
+  );
+  const staleReveal = applyRoomAction(
+    timed,
+    action('reveal', 4, 'b', {
+      roundId: state.roundId,
+      timerClock: timed.clocks.timer,
+    }),
+  );
+  const remoteRestart = applyRoomAction(
+    timed,
+    action('timer', 3, 'a', {
+      roundId: state.roundId,
+      duration: 30,
+      endsAt: 45_000,
+      autoReveal: true,
+    }),
+  );
+
+  const merged = mergeRoomState(staleReveal, remoteRestart);
+
+  assert.equal(merged.revealed, false);
+  assert.equal(merged.revealSourceTimer, null);
+  assert.equal(merged.timerEndsAt, 45_000);
+
+  const resurrected = mergeRoomState(merged, staleReveal);
+
+  assert.equal(resurrected.revealed, false);
+  assert.equal(resurrected.timerEndsAt, 45_000);
 });

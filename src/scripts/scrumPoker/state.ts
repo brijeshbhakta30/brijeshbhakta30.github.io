@@ -32,6 +32,7 @@ export type Player = {
 export type RoomState = {
   players: Player[];
   revealed: boolean;
+  revealSourceTimer: Clock | null;
   round: number;
   roundId: string;
   roundBaseId: string;
@@ -67,7 +68,7 @@ export type RoomAction =
         vote: string | null;
       }
     >
-  | Action<'reveal', { roundId: string }>
+  | Action<'reveal', { roundId: string; timerClock?: Clock }>
   | Action<'new-round', { baseRoundId: string }>
   | Action<
       'timer',
@@ -131,6 +132,7 @@ const PAGE_HIDDEN_AWAY_GRACE_MS = Math.min(5000, PRESENCE_AWAY_MS);
 export const freshRoomState = (): RoomState => ({
   players: [],
   revealed: false,
+  revealSourceTimer: null,
   round: 1,
   roundId: 'round-1',
   roundBaseId: '',
@@ -160,6 +162,9 @@ export const compareClock = (left: Clock, right: Clock) =>
 const newer = (candidate: Clock, current: Clock) =>
   compareClock(candidate, current) > 0;
 
+const sameClock = (left: Clock, right: Clock) =>
+  left.counter === right.counter && left.id === right.id;
+
 const playerTemplate = (
   id: string,
   peerId: string,
@@ -183,6 +188,14 @@ const playerTemplate = (
 
 export const normalizeTimerDuration = (value: number) =>
   Math.min(MAX_TIMER_SECONDS, Math.max(MIN_TIMER_SECONDS, Math.round(value)));
+
+export const timerSecondsLeft = (state: RoomState, now = Date.now()) =>
+  state.timerEndsAt === null
+    ? state.timerDuration
+    : Math.min(
+        state.timerDuration,
+        Math.max(0, Math.ceil((state.timerEndsAt - now) / 1000)),
+      );
 
 type JoinAction = Extract<RoomAction, { type: 'join' }>;
 type LeaveAction = Extract<RoomAction, { type: 'leave' }>;
@@ -311,6 +324,7 @@ const applyNewRoundAction = (
     roundBaseId: action.payload.baseRoundId,
     roundId: action.id,
     revealed: false,
+    revealSourceTimer: null,
     timerEndsAt: null,
     clocks: { ...state.clocks, round: clock, reveal: clock, timer: clock },
   };
@@ -322,6 +336,11 @@ const applyRevealAction = (
   clock: Clock,
 ): RoomState => {
   if (
+    action.payload.timerClock &&
+    !sameClock(action.payload.timerClock, state.clocks.timer)
+  )
+    return state;
+  if (
     action.payload.roundId !== state.roundId ||
     !newer(clock, state.clocks.reveal)
   )
@@ -330,13 +349,14 @@ const applyRevealAction = (
     return {
       ...state,
       timerEndsAt: null,
-      clocks: { ...state.clocks, reveal: clock, timer: clock },
+      clocks: { ...state.clocks, reveal: clock },
     };
   return {
     ...state,
     revealed: true,
+    revealSourceTimer: action.payload.timerClock ?? null,
     timerEndsAt: null,
-    clocks: { ...state.clocks, reveal: clock, timer: clock },
+    clocks: { ...state.clocks, reveal: clock },
   };
 };
 
@@ -350,12 +370,24 @@ const applyTimerAction = (
     !newer(clock, state.clocks.timer)
   )
     return state;
+  const cancelsStaleAutoReveal =
+    state.revealed &&
+    state.revealSourceTimer !== null &&
+    newer(clock, state.revealSourceTimer);
   return {
     ...state,
+    revealed: cancelsStaleAutoReveal ? false : state.revealed,
+    revealSourceTimer: cancelsStaleAutoReveal
+      ? null
+      : state.revealSourceTimer,
     timerDuration: normalizeTimerDuration(action.payload.duration),
     timerEndsAt: localTimerEndsAt(action.payload.endsAt, action.sentAt),
     autoReveal: action.payload.autoReveal,
-    clocks: { ...state.clocks, timer: clock },
+    clocks: {
+      ...state.clocks,
+      reveal: cancelsStaleAutoReveal ? clock : state.clocks.reveal,
+      timer: clock,
+    },
   };
 };
 
@@ -409,6 +441,7 @@ export const migrateRoomState = (input: RoomState): RoomState => {
   return {
     ...fresh,
     ...raw,
+    revealSourceTimer: raw.revealSourceTimer ?? null,
     clocks: { ...fresh.clocks, ...raw.clocks },
     players: (raw.players ?? []).map((rawPlayer) => {
       const player = rawPlayer as Partial<Player> & { vote?: string | null };
@@ -472,6 +505,7 @@ export const mergeRoomState = (
   local: RoomState,
   remoteInput: RoomState,
   sentAt?: number,
+// eslint-disable-next-line sonarjs/cognitive-complexity
 ): RoomState => {
   const remote = localizeTimerState(migrateRoomState(remoteInput), sentAt);
   const remoteRoundWins = newer(remote.clocks.round, local.clocks.round);
@@ -480,6 +514,7 @@ export const mergeRoomState = (
     merged = {
       ...merged,
       revealed: remote.revealed,
+      revealSourceTimer: remote.revealSourceTimer,
       round: remote.round,
       roundId: remote.roundId,
       roundBaseId: remote.roundBaseId,
@@ -496,11 +531,34 @@ export const mergeRoomState = (
   }
 
   if (remote.roundId === merged.roundId) {
-    if (newer(remote.clocks.reveal, merged.clocks.reveal)) {
+    const effectiveTimerClock = newer(remote.clocks.timer, merged.clocks.timer)
+      ? remote.clocks.timer
+      : merged.clocks.timer;
+    const remoteRevealMatchesTimer =
+      remote.revealSourceTimer === null ||
+      sameClock(remote.revealSourceTimer, effectiveTimerClock);
+    if (
+      remoteRevealMatchesTimer &&
+      newer(remote.clocks.reveal, merged.clocks.reveal)
+    ) {
       merged.revealed = remote.revealed;
+      merged.revealSourceTimer = remote.revealSourceTimer;
+      if (remote.revealed) merged.timerEndsAt = null;
       merged.clocks = { ...merged.clocks, reveal: remote.clocks.reveal };
     }
     if (newer(remote.clocks.timer, merged.clocks.timer)) {
+      if (
+        merged.revealed &&
+        merged.revealSourceTimer !== null &&
+        newer(remote.clocks.timer, merged.revealSourceTimer)
+      ) {
+        merged.revealed = false;
+        merged.revealSourceTimer = null;
+        merged.clocks = {
+          ...merged.clocks,
+          reveal: remote.clocks.timer,
+        };
+      }
       merged.timerDuration = remote.timerDuration;
       merged.timerEndsAt = remote.timerEndsAt;
       merged.autoReveal = remote.autoReveal;

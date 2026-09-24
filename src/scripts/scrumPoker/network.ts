@@ -203,6 +203,7 @@ const sendOpen = (connection: DataConnection | undefined, message: unknown) => {
 const roomRenderKey = (state: RoomState) =>
   JSON.stringify({
     revealed: state.revealed,
+    revealSourceTimer: state.revealSourceTimer,
     round: state.round,
     roundId: state.roundId,
     roundBaseId: state.roundBaseId,
