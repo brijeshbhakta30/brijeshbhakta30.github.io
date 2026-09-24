@@ -97,8 +97,8 @@ export type ConnectionDiagnostics = {
 
 const RECONNECT_DELAY_MS = 3000;
 const REGISTRY_RETRY_MS = 2000;
-const CONNECTION_TIMEOUT_MS = 30_000; // Increased from 15s to 30s for high-latency regions
-const REGISTRY_CONNECTION_TIMEOUT_MS = 30_000; // Increased for better reliability
+const CONNECTION_TIMEOUT_MS = 30_000;
+const REGISTRY_CONNECTION_TIMEOUT_MS = 8000;
 const POOR_RECONNECT_THRESHOLD = 4;
 const PENDING_IMPORTANT_ACTION_TTL_MS = 15_000;
 const MAX_PENDING_IMPORTANT_ACTIONS = 30;
@@ -1316,6 +1316,21 @@ export const createScrumPokerNetwork = ({
       if (registryPeer === candidate) registryPeer = undefined;
       if (!candidate.destroyed) candidate.destroy();
 
+      if (error.type === 'unavailable-id') {
+        if (
+          DEBUG_BUILD ||
+          sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true'
+        ) {
+          // eslint-disable-next-line no-console
+          console.info(
+            '[Scrum Poker WebRTC] Registry already claimed; retrying connection',
+            { registryPeerId: registryPeerId(roomCode) },
+          );
+        }
+        globalThis.setTimeout(connectToRegistry, REGISTRY_RETRY_MS);
+        return;
+      }
+
       if (DEBUG_BUILD || sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true') {
         // eslint-disable-next-line no-console
         console.error('[Scrum Poker WebRTC] Registry claim error:', {
@@ -1323,12 +1338,6 @@ export const createScrumPokerNetwork = ({
           errorMessage: error.message,
           registryPeerId: registryPeerId(roomCode),
         });
-      }
-
-      if (error.type === 'unavailable-id') {
-        // Registry already exists, try to connect to it
-        globalThis.setTimeout(connectToRegistry, REGISTRY_RETRY_MS);
-        return;
       }
       // For other errors, schedule another election attempt
       scheduleRegistryElection();
