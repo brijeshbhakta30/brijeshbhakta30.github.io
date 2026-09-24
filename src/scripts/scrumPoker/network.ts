@@ -239,6 +239,7 @@ export const createScrumPokerNetwork = ({
   onAction,
   onLeaveRequest,
   onPresence,
+  onRoomReady,
   announceJoin,
   restoreLocalVote,
   render,
@@ -256,6 +257,7 @@ export const createScrumPokerNetwork = ({
   onAction: (action: RoomAction, shouldRelay: boolean) => void;
   onLeaveRequest: () => void;
   onPresence: (message: Extract<RelayedMessage, { type: 'presence' }>) => boolean;
+  onRoomReady: () => void;
   announceJoin: () => void;
   restoreLocalVote: () => void;
   render: () => void;
@@ -286,6 +288,7 @@ export const createScrumPokerNetwork = ({
   let registryAttemptTimer: ReturnType<typeof setTimeout> | undefined;
   let seenMessages = new Set<string>();
   let disposed = false;
+  let roomReady = false;
   let syncingTopology = false;
   const pendingImportantActions = new Map<
     string,
@@ -651,10 +654,17 @@ export const createScrumPokerNetwork = ({
     for (const connection of targets) sendRelayEnvelope(connection, envelope);
   };
 
+  const markRoomReady = () => {
+    if (roomReady) return;
+    roomReady = true;
+    onRoomReady();
+  };
+
   const mergeState = (remoteState: RoomState, sentAt?: number) => {
     const previousRenderKey = roomRenderKey(getState());
     const merged = mergeRoomState(getState(), remoteState, sentAt);
     setState(merged);
+    markRoomReady();
     return previousRenderKey !== roomRenderKey(merged);
   };
 
@@ -1291,6 +1301,7 @@ export const createScrumPokerNetwork = ({
       announceJoin();
       restoreLocalVote();
       updateOverallConnection();
+      markRoomReady();
 
       if (DEBUG_BUILD || sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true') {
         // eslint-disable-next-line no-console
@@ -1440,6 +1451,7 @@ export const createScrumPokerNetwork = ({
 
   function destroy() {
     disposed = true;
+    roomReady = false;
     globalThis.clearTimeout(registryRetryTimer);
     registryRetryTimer = undefined;
     globalThis.clearTimeout(registryAttemptTimer);

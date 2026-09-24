@@ -28,6 +28,7 @@ export type RoomController = {
   openProfile: (roomCode?: string) => void;
   returnHome: () => void;
   saveProfileName: (name: string) => string;
+  setRoomLoading: (loading: boolean) => void;
   startRoom: (name: string, roomCode: string) => void;
 };
 
@@ -95,6 +96,12 @@ export const createRoomController = (
     return nextName;
   };
 
+  const setRoomLoading = (loading: boolean) => {
+    elements.roomLoading.classList.toggle('hidden', !loading);
+    elements.roomContent.classList.toggle('hidden', loading);
+    elements.roomView.setAttribute('aria-busy', String(loading));
+  };
+
   const enterRoom = () => {
     elements.setup.classList.add('hidden');
     elements.roomView.classList.remove('hidden');
@@ -158,6 +165,7 @@ export const createRoomController = (
     setLastJoinAnnouncedAt(0);
     setRevealAnimationUntil(0);
     setLocalVote(null);
+    setRoomLoading(true);
     timers.startRoomTimers();
     presence.startPresenceHeartbeat();
     enterRoom();
@@ -242,6 +250,7 @@ export const createRoomController = (
     openProfile,
     returnHome,
     saveProfileName,
+    setRoomLoading,
     startRoom,
   };
 };

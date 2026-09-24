@@ -248,6 +248,18 @@ const cards = ['0', '1', '2', '3', '5', '8', '13', '21', '?', '☕'];
         </div>
 
         <div
+          id="room-loading"
+          class="scrum-room-loading"
+          role="status"
+          aria-live="polite"
+        >
+          <span class="scrum-room-spinner" aria-hidden="true"></span>
+          <p class="m-0 font-serif text-2xl">Joining room</p>
+          <p class="m-0 text-sm text-muted">Syncing players and round state...</p>
+        </div>
+
+        <div
+          id="room-content"
           class="mt-8 grid grid-cols-[minmax(0,1fr)_280px] gap-8 max-mobile:grid-cols-1"
         >
           <div>

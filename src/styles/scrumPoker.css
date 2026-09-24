@@ -1,3 +1,25 @@
+.scrum-room-loading {
+	display: grid;
+	min-height: 420px;
+	place-content: center;
+	justify-items: center;
+	gap: 0.75rem;
+	text-align: center;
+}
+
+.scrum-room-loading.hidden {
+	display: none;
+}
+
+.scrum-room-spinner {
+	width: 2rem;
+	height: 2rem;
+	border: 2px solid var(--site-rule);
+	border-top-color: var(--site-accent);
+	border-radius: 50%;
+	animation: scrum-room-spin 700ms linear infinite;
+}
+
 .scrum-table {
 	position: relative;
 	min-height: 500px;
@@ -269,6 +291,12 @@
 	}
 }
 
+@keyframes scrum-room-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
 @keyframes scrum-card-reveal {
 	0% {
 		opacity: 0.28;
@@ -376,5 +404,9 @@
 	.scrum-profile-dialog {
 		animation: none;
 		transition: none;
+	}
+
+	.scrum-room-spinner {
+		animation: none;
 	}
 }
