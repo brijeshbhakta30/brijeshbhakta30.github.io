@@ -228,12 +228,17 @@ const initializeScrumPoker = () => {
     showToast,
   });
   document.addEventListener('keydown', handleCheatCode);
+  const handlePageHide = (event: PageTransitionEvent) => {
+    if (!event.persisted) network.destroy();
+  };
+  globalThis.addEventListener('pagehide', handlePageHide);
 
   if (sessionStorage.getItem(DEBUG_SESSION_KEY) === 'true') enableDebugApi();
   roomController.initializeFromLocation();
 
   disposeCurrentRoom = () => {
     document.removeEventListener('keydown', handleCheatCode);
+    globalThis.removeEventListener('pagehide', handlePageHide);
     presence.disposePresenceHandlers();
     timers.stopRoomTimers();
     globalThis.clearTimeout(toastTimer);
