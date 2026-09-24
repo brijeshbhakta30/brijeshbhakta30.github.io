@@ -86,7 +86,10 @@ export const createRoomTimers = ({
       }
       if (state.autoReveal && !state.revealed)
         actions.dispatchAction(
-          actions.makeAction('reveal', { roundId: state.roundId }),
+          actions.makeAction('reveal', {
+            roundId: state.roundId,
+            timerClock: state.clocks.timer,
+          }),
         );
       else {
         const settings = timerSettings();

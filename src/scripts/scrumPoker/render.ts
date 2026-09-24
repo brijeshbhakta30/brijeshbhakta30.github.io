@@ -8,6 +8,7 @@ import {
   presenceFor,
   type PresenceState,
   type RoomState,
+  timerSecondsLeft,
   votingStatusFor,
   votingStatusLabel,
 } from './state';
@@ -48,13 +49,7 @@ export const updateTimerDisplay = (
   elements: ScrumPokerElements,
   state: RoomState,
 ) => {
-  const secondsLeft =
-    state.timerEndsAt === null
-      ? state.timerDuration
-      : Math.min(
-          state.timerDuration,
-          Math.max(0, Math.ceil((state.timerEndsAt - Date.now()) / 1000)),
-        );
+  const secondsLeft = timerSecondsLeft(state);
   elements.timerDisplay.textContent = `${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, '0')}`;
   const running = state.timerEndsAt !== null;
   elements.timerDisplay.classList.toggle('is-running', running);
