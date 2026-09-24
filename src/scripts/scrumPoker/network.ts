@@ -45,6 +45,7 @@ type DirectMessage =
 
 export type RelayedMessage =
   | { type: 'action'; action: RoomAction }
+  | { type: 'leave-request' }
   | {
       type: 'presence';
       participant: ParticipantIdentity;
@@ -236,6 +237,7 @@ export const createScrumPokerNetwork = ({
   getLocalPlayerId,
   getIdentity,
   onAction,
+  onLeaveRequest,
   onPresence,
   announceJoin,
   restoreLocalVote,
@@ -252,6 +254,7 @@ export const createScrumPokerNetwork = ({
   getLocalPlayerId: () => string;
   getIdentity: () => ParticipantIdentity;
   onAction: (action: RoomAction, shouldRelay: boolean) => void;
+  onLeaveRequest: () => void;
   onPresence: (message: Extract<RelayedMessage, { type: 'presence' }>) => boolean;
   announceJoin: () => void;
   restoreLocalVote: () => void;
@@ -669,9 +672,16 @@ export const createScrumPokerNetwork = ({
       incrementDebugCounter('actionsReceived');
       refreshParticipantActivity(envelope.payload.action.actorId);
       onAction(envelope.payload.action, false);
-    } else {
+    } else if (envelope.payload.type === 'presence') {
       rememberParticipant(envelope.payload.participant);
       if (onPresence(envelope.payload)) updateTopologyIfCoordinator();
+    } else if (
+      envelope.originId !== getLocalPlayerId() &&
+      getState().players.some(
+        (player) => player.id === envelope.originId && !player.removed,
+      )
+    ) {
+      onLeaveRequest();
     }
   };
 
@@ -1468,6 +1478,7 @@ export const createScrumPokerNetwork = ({
     start,
     destroy,
     relay,
+    requestPlayersLeave: () => relay({ type: 'leave-request' }),
     ensureTopology: ensureTopologyConnections,
     connectToRegistry,
     broadcastDirectory,

@@ -24,6 +24,7 @@ declare global {
       showQualityReport: () => void;
       showCounters: () => void;
       resetCounters: () => void;
+      requestPlayersLeave: () => void;
       testConnection: () => void;
     } | undefined
 }
@@ -82,10 +83,12 @@ const getPercentage = (count: number, total: number) => {
 export const enableDebugApi = ({
   getState,
   getCurrentRoom,
+  getLocalPlayerId,
   getDiagnostics,
   getNetworkConfig,
   getConnectionMode,
   hasOpenConnection,
+  requestPlayersLeave,
 }: {
   getState: () => RoomState;
   getCurrentRoom: () => string;
@@ -112,6 +115,7 @@ export const enableDebugApi = ({
     totalConnectionFailures: number;
   };
   hasOpenConnection: (player: Player) => boolean;
+  requestPlayersLeave: () => void;
 }) => {
   const visiblePlayers = () => activePlayers(getState());
   const playerPresence = (player: Player) =>
@@ -160,6 +164,10 @@ export const enableDebugApi = ({
         {
           command: 'scrumPoker.resetCounters()',
           description: 'Reset Scrum Poker network/render counters.',
+        },
+        {
+          command: 'scrumPoker.requestPlayersLeave()',
+          description: 'Ask all other players to leave and close their connections.',
         },
       ]),
     showParticipants: () => {
@@ -406,6 +414,20 @@ export const enableDebugApi = ({
     resetCounters: () => {
       resetDebugCounters();
       console.info('Scrum Poker debug counters reset.');
+    },
+    requestPlayersLeave: () => {
+      const roomCode = getCurrentRoom();
+      if (!roomCode) {
+        console.warn('Join a Scrum Poker room before requesting players to leave.');
+        return;
+      }
+      const playerCount = visiblePlayers().filter(
+        (player) => player.id !== getLocalPlayerId(),
+      ).length;
+      requestPlayersLeave();
+      console.info(
+        `Requested ${playerCount} player${playerCount === 1 ? '' : 's'} to leave room ${roomCode}.`,
+      );
     },
     testConnection: () => {
       console.log('=== WebRTC Connection Test ===');
