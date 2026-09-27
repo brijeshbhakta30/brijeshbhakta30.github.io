@@ -7,11 +7,15 @@ interface Props {
 }
 
 const { tool, index } = Astro.props;
+const borderedClass = index > 0 ? 'border-t border-rule last:border-b' : '';
 const label = String(index + 1).padStart(2, '0');
 ---
 
 <a
-  class="group grid grid-cols-[1fr_2fr_auto] items-center gap-8 border-t border-rule py-8 no-underline last:border-b max-mobile:grid-cols-[1fr_auto]"
+  class:list={[
+    "group grid grid-cols-[1fr_2fr_auto] items-center gap-8 py-8 no-underline max-mobile:grid-cols-[1fr_auto]",
+    borderedClass
+  ]}
   href={tool.href}
 >
   <p class="m-0 font-mono text-sm tracking-[0.06em] text-accent uppercase">

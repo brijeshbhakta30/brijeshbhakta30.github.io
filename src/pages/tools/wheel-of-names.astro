@@ -8,6 +8,7 @@ import '../../styles/wheelOfNames.css';
 <ToolLayout
   title="Wheel of Names"
   description="A simple, private random name picker that works in your browser."
+  fillViewport
 >
   <div id="tool-content" class="wheel-tool" data-wheel-tool>
     <header class="wheel-header">
@@ -19,15 +20,7 @@ import '../../styles/wheelOfNames.css';
     </header>
 
     <main class="wheel-layout">
-      <section aria-labelledby="wheel-title">
-        <div class="wheel-section-heading">
-          <div>
-            <p class="wheel-eyebrow">Pick one</p>
-            <h2 id="wheel-title">Spin the wheel</h2>
-          </div>
-          <span data-entry-count class="wheel-count" aria-live="polite"></span>
-        </div>
-
+      <section aria-label="Name wheel">
         <div class="wheel-stage">
           <canvas
             data-wheel-canvas
@@ -81,14 +74,6 @@ import '../../styles/wheelOfNames.css';
           >
           <button data-sort type="button" class="wheel-button">Sort A–Z</button>
         </div>
-
-        <label class="wheel-checkbox">
-          <input data-remove-winner type="checkbox" />
-          <span>
-            <strong>Remove winners automatically</strong>
-            <small>Useful when everyone should be picked once.</small>
-          </span>
-        </label>
 
         <label class="wheel-checkbox">
           <input data-rotate-pointer type="checkbox" />

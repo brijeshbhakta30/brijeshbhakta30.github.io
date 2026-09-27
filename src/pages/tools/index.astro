@@ -12,7 +12,7 @@ import { tools } from '../../data/tools';
     description="Focused utilities that run in the browser, without accounts or unnecessary ceremony."
   />
 
-  <section class="border-b border-rule py-[clamp(5rem,10vw,10rem)]" aria-label="Available tools">
+  <section class="pb-[clamp(2rem,3vw,3rem)]" aria-label="Available tools">
     {tools.map((tool, index) => <ToolCard tool={tool} index={index} />)}
   </section>
 </BaseLayout>

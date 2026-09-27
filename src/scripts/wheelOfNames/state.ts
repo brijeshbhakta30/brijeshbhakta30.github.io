@@ -15,7 +15,6 @@ export const MAX_ENTRY_MULTIPLIER = 5;
 export type WheelState = {
   entries: string[];
   entryMultiplier: number;
-  removeWinner: boolean;
   rotatePointer: boolean;
 };
 

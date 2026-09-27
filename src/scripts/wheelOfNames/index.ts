@@ -93,14 +93,12 @@ function queryElements(root: HTMLElement) {
   return {
     canvas: required<HTMLCanvasElement>('[data-wheel-canvas]'),
     entries: required<HTMLTextAreaElement>('[data-wheel-entries]'),
-    count: required<HTMLElement>('[data-entry-count]'),
     emptyMessage: required<HTMLElement>('[data-empty-message]'),
     spinButton: required<HTMLButtonElement>('[data-spin]'),
     shuffleButton: required<HTMLButtonElement>('[data-shuffle]'),
     sortButton: required<HTMLButtonElement>('[data-sort]'),
     clearButton: required<HTMLButtonElement>('[data-clear]'),
     pointer: required<HTMLElement>('.wheel-pointer'),
-    removeWinner: required<HTMLInputElement>('[data-remove-winner]'),
     rotatePointer: required<HTMLInputElement>('[data-rotate-pointer]'),
     entryMultiplier: required<HTMLSelectElement>('[data-entry-multiplier]'),
     dialog: required<HTMLDialogElement>('[data-winner-dialog]'),
@@ -126,14 +124,12 @@ function loadState(): WheelState {
     return {
       entries,
       entryMultiplier: normalizeEntryMultiplier(stored.entryMultiplier),
-      removeWinner: stored.removeWinner === true,
       rotatePointer: stored.rotatePointer === true,
     };
   } catch {
     return {
       entries: DEFAULT_ENTRIES,
       entryMultiplier: DEFAULT_ENTRY_MULTIPLIER,
-      removeWinner: false,
       rotatePointer: false,
     };
   }
@@ -525,11 +521,6 @@ function initializeWheel(): void {
 
   const render = (syncTextarea = true) => {
     if (syncTextarea) elements.entries.value = serializeEntries(state.entries);
-    elements.count.textContent =
-      state.entryMultiplier > 1
-        ? `${state.entries.length} ${state.entries.length === 1 ? 'entry' : 'entries'} · ${effectiveEntries.length} slices`
-        : `${state.entries.length} ${state.entries.length === 1 ? 'entry' : 'entries'}`;
-    elements.removeWinner.checked = state.removeWinner;
     elements.rotatePointer.checked = state.rotatePointer;
     elements.rotatePointer.disabled = spinning;
     elements.entryMultiplier.value = String(state.entryMultiplier);
@@ -594,7 +585,6 @@ function initializeWheel(): void {
   const removeWinner = () => {
     if (winnerSourceIndex === null) return;
     setEntries(removeEntryAt(state.entries, winnerSourceIndex));
-    winnerSourceIndex = null;
     elements.dialog.close();
   };
 
@@ -689,20 +679,9 @@ function initializeWheel(): void {
       spinning = false;
       winnerSourceIndex = selectedSourceIndex;
       elements.winner.textContent = winner;
-      elements.removeDialogWinner.hidden = state.removeWinner;
       elements.dialog.showModal();
       celebrateWinner();
       render();
-
-      if (state.removeWinner) {
-        state = {
-          ...state,
-          entries: removeEntryAt(state.entries, selectedSourceIndex),
-        };
-        rebuildEffectiveEntries();
-        winnerSourceIndex = null;
-        render();
-      }
     }, reducedMotionForSpin ? REDUCED_MOTION_REVEAL_DELAY_MS : WINNER_REVEAL_DELAY_MS);
   };
 
@@ -788,14 +767,6 @@ function initializeWheel(): void {
     options,
   );
   elements.clearButton.addEventListener('click', () => setEntries([]), options);
-  elements.removeWinner.addEventListener(
-    'change',
-    () => {
-      state = { ...state, removeWinner: elements.removeWinner.checked };
-      render();
-    },
-    options,
-  );
   elements.rotatePointer.addEventListener(
     'change',
     () => {

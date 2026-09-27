@@ -19,7 +19,7 @@ const posts = await getWritingPosts();
     class="grid min-h-[max(620px,calc(91vh-96px))] content-between border-b border-rule pt-[clamp(3.5rem,7vw,7rem)] pb-8 max-mobile:min-h-auto max-mobile:pb-12"
     aria-labelledby="hero-title"
   >
-    <div>
+    <div class="pb-[clamp(4.5rem,7vw,7rem)]">
       <Eyebrow>Software engineer · Building since 2016</Eyebrow>
       <h1
         class="mb-8 max-w-[1100px] font-serif text-[clamp(3.6rem,8.5vw,8.7rem)] leading-[0.98] font-normal tracking-[-0.035em] [&_em]:text-accent"
@@ -50,11 +50,11 @@ const posts = await getWritingPosts();
   </section>
 
   <section
-    class="border-b border-rule py-[clamp(5rem,10vw,10rem)]"
+    class="pt-[clamp(3rem,6vw,6rem)] pb-[clamp(2rem,4vw,4rem)]"
     aria-label="Capabilities"
   >
     <SectionTitle eyebrow="Range" title="Across the stack, with depth." />
-    <div class="grid grid-cols-3 border-t border-rule max-mobile:grid-cols-1">
+    <div class="grid grid-cols-3 border-t border-b border-rule max-mobile:grid-cols-1">
       <article
         class="min-h-[310px] border-r border-rule p-8 last:border-r-0 max-mobile:min-h-auto max-mobile:border-r-0 max-mobile:border-b max-mobile:px-0"
       >
@@ -99,7 +99,7 @@ const posts = await getWritingPosts();
   </section>
 
   <section
-    class="border-b border-rule py-[clamp(5rem,10vw,10rem)]"
+    class="pb-[clamp(2rem,4vw,4rem)]"
     id="selected-work"
     aria-label="Selected work"
   >
@@ -117,7 +117,7 @@ const posts = await getWritingPosts();
   </section>
 
   <section
-    class="border-b border-rule py-[clamp(5rem,10vw,10rem)]"
+    class="border-b border-rule pb-[clamp(2rem,4vw,4rem)]"
     aria-label="Recent writing"
   >
     <SectionTitle
@@ -136,7 +136,7 @@ const posts = await getWritingPosts();
   </section>
 
   <section
-    class="grid grid-cols-[1fr_2fr] gap-8 border-b border-rule py-[clamp(5rem,10vw,10rem)] max-mobile:grid-cols-1"
+    class="grid grid-cols-[1fr_2fr] gap-8 border-b border-rule py-[clamp(3rem,7vw,7rem)] max-mobile:grid-cols-1"
     aria-labelledby="contact-title"
   >
     <Eyebrow>Start a conversation</Eyebrow>

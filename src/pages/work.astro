@@ -17,13 +17,15 @@ import { projects } from '../data/work';
     description="A selection of product work across backend systems, web applications, and mobile products."
   />
   <section
-    class="border-b border-rule py-[clamp(5rem,10vw,10rem)]"
+    class="pb-[clamp(2rem,5vw,5rem)]"
     aria-label="Project archive"
   >
-    <Notice>
-      <strong>Archive note:</strong> These summaries cover work across different stages of my career. Client and employer names are intentionally omitted.
-    </Notice>
-    <div class="mt-16 border-t border-rule">
+    <div class="py-16">
+      <Notice>
+        <strong>Archive note:</strong> These summaries cover work across different stages of my career. Client and employer names are intentionally omitted.
+      </Notice>
+    </div>
+    <div class="border-t border-rule">
       {
         projects.map((project) => <ProjectRow project={project} />)
       }

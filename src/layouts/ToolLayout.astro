@@ -5,9 +5,10 @@ import DocumentLayout from './DocumentLayout.astro';
 interface Props {
   title: string;
   description: string;
+  fillViewport?: boolean;
 }
 
-const { title, description } = Astro.props;
+const { title, description, fillViewport = false } = Astro.props;
 ---
 
 <DocumentLayout title={title} description={description}>
@@ -16,11 +17,17 @@ const { title, description } = Astro.props;
     href="#tool-content">Skip to tool</a
   >
   <div
-    class="mx-auto w-[min(1500px,calc(100%-48px))] max-mobile:w-[min(100%-28px,1500px)]"
+    class:list={[
+      'mx-auto w-[min(1500px,calc(100%-48px))] max-mobile:w-[min(100%-28px,1500px)]',
+      fillViewport && 'flex min-h-svh flex-col',
+    ]}
   >
     <slot />
     <footer
-      class="flex items-center justify-center gap-1.5 border-t border-rule py-6 text-sm text-muted"
+      class:list={[
+        'flex items-center justify-center gap-1.5 border-t border-rule py-6 text-sm text-muted',
+        fillViewport && 'mt-auto',
+      ]}
     >
       <MadeWithLove
         iconClass="size-3.5"
