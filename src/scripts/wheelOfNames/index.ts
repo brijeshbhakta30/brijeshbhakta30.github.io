@@ -25,6 +25,36 @@ const WHEEL_STOP_RADIANS_PER_SECOND = 0.012;
 const POINTER_MAX_TRAVEL_PIXELS = 170;
 const POINTER_ORBIT_VELOCITY_RATIO = 0.18;
 const SPIN_RANDOM_SCALE = 1_000_000;
+const WINNER_REVEAL_DELAY_MS = 700;
+const REDUCED_MOTION_REVEAL_DELAY_MS = 300;
+const CONFETTI_PIECES_PER_BURST = 26;
+const CONFETTI_BURST_INTERVAL_SECONDS = 0.12;
+const CONFETTI_BURST_ORIGINS = [
+  [14, 24],
+  [43, 16],
+  [77, 22],
+  [88, 49],
+  [71, 70],
+  [48, 58],
+  [23, 71],
+  [11, 49],
+  [57, 35],
+] as const;
+const DELAYED_CONFETTI_BURST_ORIGINS = [
+  [21, 31],
+  [51, 23],
+  [83, 31],
+  [80, 57],
+  [64, 75],
+  [55, 67],
+  [31, 64],
+  [19, 56],
+  [64, 43],
+] as const;
+const CONFETTI_BURST_WAVES = [
+  { origins: CONFETTI_BURST_ORIGINS, delay: 0 },
+  { origins: DELAYED_CONFETTI_BURST_ORIGINS, delay: 0.75 },
+] as const;
 const WHEEL_COLORS = [
   { fill: '#2f80a7', text: '#ffffff' },
   { fill: '#d44d5c', text: '#ffffff' },
@@ -74,6 +104,7 @@ function queryElements(root: HTMLElement) {
     rotatePointer: required<HTMLInputElement>('[data-rotate-pointer]'),
     entryMultiplier: required<HTMLSelectElement>('[data-entry-multiplier]'),
     dialog: required<HTMLDialogElement>('[data-winner-dialog]'),
+    confetti: required<HTMLElement>('[data-confetti]'),
     winner: required<HTMLElement>('[data-winner-name]'),
     closeDialog: required<HTMLButtonElement>('[data-close-winner]'),
     removeDialogWinner: required<HTMLButtonElement>(
@@ -425,6 +456,9 @@ function initializeWheel(): void {
   let pointerPhase = 0;
   let reducedMotionForSpin = false;
   let spinning = false;
+  let revealPending = false;
+  let revealTimeout = 0;
+  let confettiTimeout = 0;
   const controller = new AbortController();
   const options = { signal: controller.signal };
 
@@ -473,7 +507,10 @@ function initializeWheel(): void {
       'aria-disabled',
       spinning || !canSpin() ? 'true' : 'false',
     );
-    elements.spinButton.textContent = spinning ? 'Spinning' : 'Spin';
+    let spinButtonText = 'Spin';
+    if (revealPending) spinButtonText = 'Revealing…';
+    else if (spinning) spinButtonText = 'Spinning';
+    elements.spinButton.textContent = spinButtonText;
     elements.canvas.classList.toggle('is-disabled', spinning || !canSpin());
     elements.canvas
       .closest('.wheel-stage')
@@ -561,6 +598,70 @@ function initializeWheel(): void {
     elements.dialog.close();
   };
 
+  const celebrateWinner = () => {
+    if (reducedMotionForSpin) return;
+
+    const pieces = document.createDocumentFragment();
+    const maximumRadius = Math.min(
+      260,
+      Math.max(95, Math.min(innerWidth, innerHeight) * 0.32),
+    );
+
+    for (const [waveIndex, wave] of CONFETTI_BURST_WAVES.entries()) {
+      for (const [burstIndex, [originX, originY]] of wave.origins.entries()) {
+        for (let index = 0; index < CONFETTI_PIECES_PER_BURST; index += 1) {
+          const piece = document.createElement('span');
+          const angle =
+            (index / CONFETTI_PIECES_PER_BURST) * TAU +
+            randomBetween(-0.1, 0.1);
+          const radius = randomBetween(maximumRadius * 0.55, maximumRadius);
+          const x = Math.cos(angle) * radius;
+          const y = Math.sin(angle) * radius;
+          const rotation = randomBetween(-720, 720);
+          piece.className =
+            index % 3 === 0
+              ? 'wheel-confetti-piece wheel-confetti-piece--round'
+              : 'wheel-confetti-piece';
+          piece.style.setProperty('--confetti-origin-x', `${originX}%`);
+          piece.style.setProperty('--confetti-origin-y', `${originY}%`);
+          piece.style.setProperty(
+            '--confetti-color',
+            WHEEL_COLORS[(waveIndex + burstIndex + index) % WHEEL_COLORS.length]
+              .fill,
+          );
+          piece.style.setProperty('--confetti-x', `${x}px`);
+          piece.style.setProperty(
+            '--confetti-y',
+            `${y + randomBetween(85, 150)}px`,
+          );
+          piece.style.setProperty('--confetti-mid-x', `${x * 0.8}px`);
+          piece.style.setProperty('--confetti-mid-y', `${y * 0.8}px`);
+          piece.style.setProperty('--confetti-rotation', `${rotation}deg`);
+          piece.style.setProperty(
+            '--confetti-mid-rotation',
+            `${rotation * 0.5}deg`,
+          );
+          piece.style.setProperty(
+            '--confetti-duration',
+            `${randomBetween(1.9, 2.7)}s`,
+          );
+          piece.style.setProperty(
+            '--confetti-delay',
+            `${wave.delay + burstIndex * CONFETTI_BURST_INTERVAL_SECONDS}s`,
+          );
+          pieces.append(piece);
+        }
+      }
+    }
+
+    elements.confetti.replaceChildren(pieces);
+    globalThis.clearTimeout(confettiTimeout);
+    confettiTimeout = globalThis.setTimeout(() => {
+      elements.confetti.replaceChildren();
+      confettiTimeout = 0;
+    }, 4700);
+  };
+
   const finishSpin = () => {
     const pointerAngle = normalizeAngle(
       POINTER_RESTING_ANGLE + pointerAngleOffset,
@@ -577,25 +678,32 @@ function initializeWheel(): void {
     const winner = state.entries[selectedSourceIndex];
 
     rotation = normalizeAngle(rotation);
-    spinning = false;
     spinMotion = null;
     spinLastDraw = 0;
-    winnerSourceIndex = selectedSourceIndex;
-    elements.winner.textContent = winner;
-    elements.removeDialogWinner.hidden = state.removeWinner;
-    elements.dialog.showModal();
+    revealPending = true;
     render();
 
-    if (state.removeWinner) {
-      state = {
-        ...state,
-        entries: removeEntryAt(state.entries, selectedSourceIndex),
-      };
-      rebuildEffectiveEntries();
-      winnerSourceIndex = null;
+    revealTimeout = globalThis.setTimeout(() => {
+      revealTimeout = 0;
+      revealPending = false;
+      spinning = false;
+      winnerSourceIndex = selectedSourceIndex;
       elements.winner.textContent = winner;
+      elements.removeDialogWinner.hidden = state.removeWinner;
+      elements.dialog.showModal();
+      celebrateWinner();
       render();
-    }
+
+      if (state.removeWinner) {
+        state = {
+          ...state,
+          entries: removeEntryAt(state.entries, selectedSourceIndex),
+        };
+        rebuildEffectiveEntries();
+        winnerSourceIndex = null;
+        render();
+      }
+    }, reducedMotionForSpin ? REDUCED_MOTION_REVEAL_DELAY_MS : WINNER_REVEAL_DELAY_MS);
   };
 
   const spin = () => {
@@ -717,13 +825,24 @@ function initializeWheel(): void {
     () => elements.dialog.close(),
     options,
   );
-  elements.dialog.addEventListener('close', updateMotionState, options);
+  elements.dialog.addEventListener(
+    'close',
+    () => {
+      globalThis.clearTimeout(confettiTimeout);
+      confettiTimeout = 0;
+      elements.confetti.replaceChildren();
+      updateMotionState();
+    },
+    options,
+  );
   elements.removeDialogWinner.addEventListener('click', removeWinner, options);
   window.addEventListener('resize', () => render(), options);
 
   render();
   disposeCurrentWheel = () => {
     cancelAnimationFrame(spinFrame);
+    globalThis.clearTimeout(revealTimeout);
+    globalThis.clearTimeout(confettiTimeout);
     stopIdleRotation();
     controller.abort();
     elements.dialog.close();

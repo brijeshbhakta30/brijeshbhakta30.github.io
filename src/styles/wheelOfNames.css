@@ -347,12 +347,58 @@ html[data-theme="dark"] .wheel-tool {
 	background: var(--wheel-bg);
 	padding: 0;
 	color: var(--wheel-text);
+	overflow: visible;
+}
+
+.wheel-confetti {
+	position: fixed;
+	z-index: 2;
+	inset: 0;
+	overflow: hidden;
+	pointer-events: none;
+}
+
+.wheel-confetti-piece {
+	position: absolute;
+	top: var(--confetti-origin-y);
+	left: var(--confetti-origin-x);
+	width: 0.65rem;
+	height: 0.9rem;
+	background: var(--confetti-color);
+	opacity: 0;
+	animation: wheel-confetti-burst var(--confetti-duration) ease-out var(--confetti-delay) forwards;
+}
+
+.wheel-confetti-piece--round {
+	width: 0.55rem;
+	height: 0.55rem;
+	border-radius: 50%;
+}
+
+@keyframes wheel-confetti-burst {
+	0% {
+		transform: translate(-50%, -50%) scale(0.3);
+		opacity: 0;
+	}
+	8% {
+		opacity: 1;
+	}
+	40% {
+		transform: translate(calc(-50% + var(--confetti-mid-x)), calc(-50% + var(--confetti-mid-y)))
+			rotate(var(--confetti-mid-rotation));
+	}
+	100% {
+		transform: translate(calc(-50% + var(--confetti-x)), calc(-50% + var(--confetti-y)))
+			rotate(var(--confetti-rotation));
+		opacity: 0;
+	}
 }
 
 .wheel-dialog::backdrop {
 	background: rgb(0 0 0 / 0.5);
 }
 .wheel-dialog-content {
+	position: relative;
 	padding: 2rem;
 	text-align: center;
 }
