@@ -30,18 +30,17 @@
 	"homepage": "https://brijeshbhakta.com",
 	"dependencies": {
 		"@astrojs/check": "0.9.10",
-		"@astrojs/sitemap": "3.7.3",
+		"@astrojs/sitemap": "3.7.4",
 		"@tailwindcss/vite": "4.3.3",
-		"astro": "7.2.9",
+		"astro": "7.3.5",
 		"peerjs": "1.5.5",
-		"sharp": "0.35.4",
 		"tailwindcss": "4.3.3",
 		"typescript": "6.0.3"
 	},
 	"devDependencies": {
-		"@commitlint/cli": "21.2.2",
-		"@commitlint/config-conventional": "21.2.2",
-		"@eslint/css": "1.4.0",
+		"@commitlint/cli": "21.2.3",
+		"@commitlint/config-conventional": "21.2.3",
+		"@eslint/css": "2.0.0",
 		"devmoji": "2.3.0",
 		"eslint": "9.39.5",
 		"eslint-config-blazex": "0.0.36",
@@ -49,9 +48,10 @@
 		"eslint-plugin-jsx-a11y": "6.10.2",
 		"eslint-plugin-tailwindcss": "4.4.0",
 		"husky": "9.1.7",
-		"lint-staged": "17.4.1",
-		"prettier": "3.9.6",
-		"tailwind-csstree": "0.3.3",
-		"typescript-eslint": "8.69.0"
+		"lint-staged": "17.6.0",
+		"prettier": "3.9.9",
+		"sharp": "0.35.5",
+		"tailwind-csstree": "0.4.0",
+		"typescript-eslint": "8.70.1"
 	}
 }
