@@ -453,8 +453,8 @@ function initializeWheel(): void {
   let reducedMotionForSpin = false;
   let spinning = false;
   let revealPending = false;
-  let revealTimeout = 0;
-  let confettiTimeout = 0;
+  let revealTimeout: NodeJS.Timeout | undefined;
+  let confettiTimeout: NodeJS.Timeout | undefined;
   const controller = new AbortController();
   const options = { signal: controller.signal };
 
@@ -648,7 +648,7 @@ function initializeWheel(): void {
     globalThis.clearTimeout(confettiTimeout);
     confettiTimeout = globalThis.setTimeout(() => {
       elements.confetti.replaceChildren();
-      confettiTimeout = 0;
+      confettiTimeout = undefined;
     }, 4700);
   };
 
@@ -674,7 +674,7 @@ function initializeWheel(): void {
     render();
 
     revealTimeout = globalThis.setTimeout(() => {
-      revealTimeout = 0;
+      revealTimeout = undefined;
       revealPending = false;
       spinning = false;
       winnerSourceIndex = selectedSourceIndex;
@@ -800,7 +800,7 @@ function initializeWheel(): void {
     'close',
     () => {
       globalThis.clearTimeout(confettiTimeout);
-      confettiTimeout = 0;
+      confettiTimeout = undefined;
       elements.confetti.replaceChildren();
       updateMotionState();
     },
