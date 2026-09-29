@@ -204,7 +204,6 @@ export const renderScrumPoker = ({
   revealAnimationActive: boolean;
   focusResultAfterReveal: boolean;
   hasOpenConnection: (player: Player) => boolean;
-// eslint-disable-next-line sonarjs/cognitive-complexity
 }) => {
   const players = activePlayers(state);
   const voted = players.filter(
@@ -244,7 +243,6 @@ export const renderScrumPoker = ({
   elements.timerInput.disabled = state.revealed;
   elements.autoRevealInput.checked = state.autoReveal;
   elements.autoRevealInput.disabled = state.revealed;
-  elements.allowVoteChangesInput.checked = state.allowVoteChangesAfterReveal;
   elements.startTimerButton.textContent =
     state.timerEndsAt === null ? 'Start timer' : 'Restart timer';
   elements.startTimerButton.disabled = state.revealed;
@@ -269,6 +267,10 @@ export const renderScrumPoker = ({
         state.revealed && player.voteRoundId === state.roundId && player.vote
           ? player.vote
           : '•';
+      const previousVote =
+        state.revealed && hasVoted && player.previousVote !== player.vote
+          ? player.previousVote
+          : null;
       const isCurrentPlayer = player.id === localPlayerId;
       return [
         state.revealed,
@@ -276,6 +278,7 @@ export const renderScrumPoker = ({
         player.name,
         hasVoted,
         cardValue,
+        previousVote,
         isCurrentPlayer,
         angle,
         throwAngle,
@@ -297,10 +300,15 @@ export const renderScrumPoker = ({
           state.revealed && player.voteRoundId === state.roundId && player.vote
             ? player.vote
             : '•';
+        const previousVote =
+          state.revealed && hasVoted && player.previousVote !== player.vote
+            ? player.previousVote
+            : null;
         const isCurrentPlayer = player.id === localPlayerId;
       return `<article class="scrum-player" style="--angle:${angle};--throw-x:${Math.cos(throwAngle) * 210}px;--throw-y:${Math.sin(throwAngle) * 150}px">
         <div class="scrum-player-card ${hasVoted ? 'is-voted' : ''} ${state.revealed && hasVoted ? 'is-revealed' : ''} ${animateReveal && hasVoted ? 'is-reveal-entering' : ''}">
           ${escapeHtml(cardValue)}
+          ${previousVote === null ? '' : `<span class="scrum-player-previous">was ${escapeHtml(previousVote)}</span>`}
         </div>
         <strong class="scrum-player-name ${isCurrentPlayer ? 'text-accent' : ''}">
           ${escapeHtml(player.name)}
@@ -322,12 +330,9 @@ export const renderScrumPoker = ({
       // eslint-disable-next-line sonarjs/different-types-comparison
       String(button.dataset.card === localVote),
     );
-    button.disabled = state.revealed && !state.allowVoteChangesAfterReveal;
   }
   elements.cardHint.textContent = state.revealed
-    ? (state.allowVoteChangesAfterReveal
-      ? 'Choose again to update'
-      : 'Voting is locked')
+    ? 'Choose again to update'
     : 'Tap again to clear';
   renderStatistics(elements, state, players, animateReveal);
   updateTimerDisplay(elements, state);

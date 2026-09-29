@@ -204,24 +204,45 @@ test('sixteen simultaneous joins remain distinct', () => {
   assert.equal(new Set(state.players.map((player) => player.id)).size, 16);
 });
 
-test('concurrent configuration and round actions merge independently', () => {
-  const initial = joined();
-  const roundState = applyRoomAction(
-    initial,
-    action('new-round', 2, 'a', { baseRoundId: initial.roundId }),
+test('a revealed vote change keeps only the immediately previous value', () => {
+  let state = joined();
+  const vote = (counter: number, value: string | null) => {
+    state = applyRoomAction(
+      state,
+      action('vote', counter, 'a', {
+        playerId: 'a',
+        roundId: state.roundId,
+        hasVoted: value !== null,
+        vote: value,
+      }),
+    );
+  };
+
+  vote(2, null);
+  state = applyRoomAction(
+    state,
+    action('reveal', 3, 'a', { roundId: state.roundId }),
   );
-  const configuredState = applyRoomAction(
-    initial,
-    action('voting-config', 2, 'b', {
-      allowVoteChangesAfterReveal: false,
-    }),
+  vote(4, '3');
+  assert.equal(state.players[0].previousVote, null);
+  vote(5, '5');
+  assert.equal(state.players[0].previousVote, '3');
+  vote(6, '5');
+  assert.equal(state.players[0].previousVote, '3');
+  vote(7, '8');
+  assert.equal(state.players[0].previousVote, '5');
+  vote(8, null);
+  vote(9, '13');
+  assert.equal(state.players[0].previousVote, '8');
+
+  const merged = mergeRoomState(joined(), state);
+  assert.equal(merged.players[0].previousVote, '8');
+  state = applyRoomAction(
+    state,
+    action('new-round', 10, 'a', { baseRoundId: state.roundId }),
   );
-  const left = mergeRoomState(roundState, configuredState);
-  const right = mergeRoomState(configuredState, roundState);
-  assert.equal(left.round, 2);
-  assert.equal(right.round, 2);
-  assert.equal(left.allowVoteChangesAfterReveal, false);
-  assert.equal(right.allowVoteChangesAfterReveal, false);
+  vote(11, null);
+  assert.equal(state.players[0].previousVote, null);
 });
 
 test('timer actions preserve remaining time across clock skew', () => {

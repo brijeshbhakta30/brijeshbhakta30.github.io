@@ -211,7 +211,6 @@ const roomRenderKey = (state: RoomState) =>
     timerDuration: state.timerDuration,
     timerEndsAt: state.timerEndsAt,
     autoReveal: state.autoReveal,
-    allowVoteChangesAfterReveal: state.allowVoteChangesAfterReveal,
     version: state.version,
     clocks: state.clocks,
     players: state.players.map((player) => ({
@@ -220,6 +219,7 @@ const roomRenderKey = (state: RoomState) =>
       name: player.name,
       hasVoted: player.hasVoted,
       vote: player.vote,
+      previousVote: player.previousVote,
       voteRoundId: player.voteRoundId,
       pageHidden: player.pageHidden,
       pageHiddenAt: player.pageHiddenAt,

@@ -170,6 +170,7 @@
 }
 
 .scrum-player-card {
+	position: relative;
 	display: grid;
 	width: 46px;
 	height: 64px;
@@ -216,9 +217,21 @@
 	display: block;
 	overflow: hidden;
 	font-family: var(--font-mono);
-	font-size: 0.68rem;
+	font-size: 0.7rem;
 	text-wrap: pretty;
 	text-overflow: ellipsis;
+}
+
+.scrum-player-previous {
+	position: absolute;
+	right: 0;
+	bottom: 4px;
+	left: 0;
+	color: var(--site-text-muted);
+	font-family: var(--font-mono);
+	font-size: 0.65rem;
+	line-height: 1;
+	white-space: nowrap;
 }
 
 .scrum-player-role {

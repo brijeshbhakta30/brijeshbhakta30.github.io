@@ -13,6 +13,7 @@ export type Player = {
   name: string;
   hasVoted: boolean;
   vote: string | null;
+  previousVote: string | null;
   voteRoundId: string;
   lastSeenAt: number;
   pageHidden: boolean;
@@ -39,13 +40,11 @@ export type RoomState = {
   timerDuration: number;
   timerEndsAt: number | null;
   autoReveal: boolean;
-  allowVoteChangesAfterReveal: boolean;
   version: number;
   clocks: {
     round: Clock;
     reveal: Clock;
     timer: Clock;
-    votingConfig: Clock;
   };
   /** Deprecated ownership fields are deliberately non-authoritative. */
   facilitatorId?: string;
@@ -78,8 +77,7 @@ export type RoomAction =
         endsAt: number | null;
         autoReveal: boolean;
       }
-    >
-  | Action<'voting-config', { allowVoteChangesAfterReveal: boolean }>;
+    >;
 
 type Action<T extends string, P> = {
   id: string;
@@ -139,13 +137,11 @@ export const freshRoomState = (): RoomState => ({
   timerDuration: DEFAULT_TIMER_SECONDS,
   timerEndsAt: null,
   autoReveal: true,
-  allowVoteChangesAfterReveal: true,
   version: 0,
   clocks: {
     round: ZERO_CLOCK,
     reveal: ZERO_CLOCK,
     timer: ZERO_CLOCK,
-    votingConfig: ZERO_CLOCK,
   },
 });
 
@@ -177,6 +173,7 @@ const playerTemplate = (
   name,
   hasVoted: false,
   vote: null,
+  previousVote: null,
   voteRoundId: '',
   lastSeenAt: now,
   pageHidden: false,
@@ -204,7 +201,6 @@ type VoteAction = Extract<RoomAction, { type: 'vote' }>;
 type NewRoundAction = Extract<RoomAction, { type: 'new-round' }>;
 type RevealAction = Extract<RoomAction, { type: 'reveal' }>;
 type TimerAction = Extract<RoomAction, { type: 'timer' }>;
-type VotingConfigAction = Extract<RoomAction, { type: 'voting-config' }>;
 
 const applyJoinAction = (
   state: RoomState,
@@ -296,6 +292,14 @@ const applyVoteAction = (
             ...player,
             hasVoted: action.payload.hasVoted,
             vote: action.payload.vote,
+            previousVote:
+              state.revealed &&
+              player.voteRoundId === state.roundId &&
+              action.payload.vote !== player.vote
+                ? (player.vote ?? player.previousVote)
+                : (player.voteRoundId === state.roundId
+                  ? player.previousVote
+                  : null),
             voteRoundId: action.payload.roundId,
             clocks: { ...player.clocks, vote: clock },
           }
@@ -391,20 +395,6 @@ const applyTimerAction = (
   };
 };
 
-const applyVotingConfigAction = (
-  state: RoomState,
-  action: VotingConfigAction,
-  clock: Clock,
-): RoomState =>
-  newer(clock, state.clocks.votingConfig)
-    ? {
-        ...state,
-        allowVoteChangesAfterReveal:
-          action.payload.allowVoteChangesAfterReveal,
-        clocks: { ...state.clocks, votingConfig: clock },
-      }
-    : state;
-
 export const applyRoomAction = (
   current: RoomState,
   action: RoomAction,
@@ -430,8 +420,8 @@ export const applyRoomAction = (
       return applyTimerAction(state, action, clock);
     case 'vote':
       return applyVoteAction(state, action, clock);
-    case 'voting-config':
-      return applyVotingConfigAction(state, action, clock);
+    default:
+      return state;
   }
 };
 
@@ -456,6 +446,7 @@ export const migrateRoomState = (input: RoomState): RoomState => {
         ...player,
         hasVoted: player.hasVoted ?? player.vote != null,
         vote: player.vote === '__hidden__' ? null : (player.vote ?? null),
+        previousVote: player.previousVote ?? null,
         clocks: {
           membership: player.clocks?.membership ?? ZERO_CLOCK,
           name: player.clocks?.name ?? ZERO_CLOCK,
@@ -488,6 +479,7 @@ const mergePlayer = (local: Player | undefined, remote: Player): Player => {
       ? {
           hasVoted: remote.hasVoted,
           vote: remote.vote,
+          previousVote: remote.previousVote,
           voteRoundId: remote.voteRoundId,
         }
       : {}),
@@ -565,14 +557,6 @@ export const mergeRoomState = (
       merged.clocks = { ...merged.clocks, timer: remote.clocks.timer };
     }
   }
-  if (newer(remote.clocks.votingConfig, merged.clocks.votingConfig)) {
-    merged.allowVoteChangesAfterReveal = remote.allowVoteChangesAfterReveal;
-    merged.clocks = {
-      ...merged.clocks,
-      votingConfig: remote.clocks.votingConfig,
-    };
-  }
-
   const players = new Map(merged.players.map((player) => [player.id, player]));
   for (const player of remote.players)
     players.set(player.id, mergePlayer(players.get(player.id), player));

@@ -198,7 +198,6 @@ export const enableDebugApi = ({
             ? new Date(state.timerEndsAt).toISOString()
             : null,
           autoReveal: state.autoReveal,
-          allowVoteChangesAfterReveal: state.allowVoteChangesAfterReveal,
           participantCount: visiblePlayers().length,
         },
       ]);

@@ -167,7 +167,6 @@ export const createRoomActions = (
     for (const button of elements.cardButtons) {
       button.addEventListener('click', () => {
         const state = context.getState();
-        if (state.revealed && !state.allowVoteChangesAfterReveal) return;
         const localVote =
           // eslint-disable-next-line sonarjs/different-types-comparison
           context.getLocalVote() === button.dataset.card
@@ -203,13 +202,6 @@ export const createRoomActions = (
         );
       }),
     );
-    elements.allowVoteChangesInput.addEventListener('change', () => {
-      dispatchAction(
-        makeAction('voting-config', {
-          allowVoteChangesAfterReveal: elements.allowVoteChangesInput.checked,
-        }),
-      );
-    });
   }
 
   return {

@@ -23,7 +23,6 @@ export type ScrumPokerElements = {
   timerDisplay: HTMLElement;
   timerInput: HTMLInputElement;
   autoRevealInput: HTMLInputElement;
-  allowVoteChangesInput: HTMLInputElement;
   startTimerButton: HTMLButtonElement;
   stopTimerButton: HTMLButtonElement;
   cardHint: HTMLElement;
@@ -77,7 +76,6 @@ export const queryScrumPokerElements = () => {
     timerDisplay: find<HTMLElement>('#timer-display'),
     timerInput: find<HTMLInputElement>('#timer-duration'),
     autoRevealInput: find<HTMLInputElement>('#timer-auto-reveal'),
-    allowVoteChangesInput: find<HTMLInputElement>('#allow-vote-changes'),
     startTimerButton: find<HTMLButtonElement>('#start-timer'),
     stopTimerButton: find<HTMLButtonElement>('#stop-timer'),
     cardHint: find<HTMLElement>('#card-hint'),
