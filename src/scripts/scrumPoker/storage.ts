@@ -1,5 +1,5 @@
 import { CARD_ORDER, ROOM_ALPHABET } from './constants';
-import { makeRandomId } from './state';
+import { makeRandomId, normalizePlayerName } from './state';
 
 const PROFILE_NAME_STORAGE_KEY = 'scrum-poker-name';
 const IDENTITY_STORAGE_PREFIX = 'scrum-poker-identity:';
@@ -47,7 +47,7 @@ export const roomFromLocation = () => {
 };
 
 export const saveProfileName = (name: string) => {
-  const savedName = name.trim().slice(0, 32);
+  const savedName = normalizePlayerName(name.trim().slice(0, 32));
   if (!savedName) return '';
   localStorage.setItem(PROFILE_NAME_STORAGE_KEY, savedName);
   return savedName;

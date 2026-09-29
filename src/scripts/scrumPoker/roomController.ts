@@ -231,13 +231,13 @@ export const createRoomController = (
 
   const initializeFromLocation = () => {
     const savedName = savedProfileName();
-    if (savedName) saveProfileName(savedName);
-    elements.createName.value = savedName;
-    elements.joinName.value = savedName;
+    const normalizedName = savedName ? saveProfileName(savedName) : '';
+    elements.createName.value = normalizedName;
+    elements.joinName.value = normalizedName;
     const roomFromUrl = roomFromLocation();
     if (roomFromUrl) {
       elements.roomInput.value = roomFromUrl;
-      if (savedName) startRoom(savedName, roomFromUrl);
+      if (normalizedName) startRoom(normalizedName, roomFromUrl);
       else openProfile(roomFromUrl);
     }
   };

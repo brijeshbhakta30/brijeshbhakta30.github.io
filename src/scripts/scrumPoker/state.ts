@@ -155,6 +155,13 @@ export const compareClock = (left: Clock, right: Clock) =>
     ? left.id.localeCompare(right.id)
     : left.counter - right.counter;
 
+export const normalizePlayerName = (name: string) =>
+  name.replaceAll(/\p{L}+/gu, (word) =>
+    word === word.toLowerCase()
+      ? word[0].toUpperCase() + word.slice(1)
+      : word,
+  );
+
 const newer = (candidate: Clock, current: Clock) =>
   compareClock(candidate, current) > 0;
 
@@ -170,7 +177,7 @@ const playerTemplate = (
 ): Player => ({
   id,
   peerId,
-  name,
+  name: normalizePlayerName(name),
   hasVoted: false,
   vote: null,
   previousVote: null,
@@ -226,7 +233,7 @@ const applyJoinAction = (
         ? {
             ...player,
             peerId,
-            name: name || player.name,
+            name: name ? normalizePlayerName(name) : player.name,
             lastSeenAt: now,
             pageHidden: false,
             pageHiddenAt: undefined,
@@ -271,7 +278,7 @@ const applyRenameAction = (
     player.id === action.payload.playerId && newer(clock, player.clocks.name)
       ? {
           ...player,
-          name: action.payload.name,
+          name: normalizePlayerName(action.payload.name),
           clocks: { ...player.clocks, name: clock },
         }
       : player,
@@ -444,6 +451,7 @@ export const migrateRoomState = (input: RoomState): RoomState => {
           ZERO_CLOCK,
         ),
         ...player,
+        name: normalizePlayerName(player.name ?? 'Anonymous'),
         hasVoted: player.hasVoted ?? player.vote != null,
         vote: player.vote === '__hidden__' ? null : (player.vote ?? null),
         previousVote: player.previousVote ?? null,

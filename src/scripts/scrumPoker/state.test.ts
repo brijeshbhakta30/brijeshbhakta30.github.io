@@ -6,6 +6,7 @@ import {
   freshRoomState,
   makeRandomId,
   mergeRoomState,
+  normalizePlayerName,
   PRESENCE_TIMEOUT_MS,
   presenceFor,
   type RoomAction,
@@ -97,6 +98,32 @@ test('a returning participant reclaims the same identity and vote', () => {
   assert.equal(state.players.length, 1);
   assert.equal(state.players[0].peerId, 'peer-a-new');
   assert.equal(state.players[0].hasVoted, true);
+});
+
+test('lowercase names are capitalized without changing initials or mixed case', () => {
+  assert.equal(normalizePlayerName('j'), 'J');
+  assert.equal(normalizePlayerName('john'), 'John');
+  assert.equal(normalizePlayerName('john doe'), 'John Doe');
+  assert.equal(normalizePlayerName("mary-jane o'connor"), "Mary-Jane O'Connor");
+  assert.equal(normalizePlayerName('JD'), 'JD');
+  assert.equal(normalizePlayerName('JD SD McDonald'), 'JD SD McDonald');
+
+  const joinedState = applyRoomAction(
+    freshRoomState(),
+    action('join', 1, 'jd', {
+      playerId: 'jd',
+      peerId: 'peer-jd',
+      name: 'JD',
+      now: 1000,
+    }),
+  );
+  assert.equal(joinedState.players[0].name, 'JD');
+
+  const state = applyRoomAction(
+    joined(),
+    action('rename', 2, 'a', { playerId: 'a', name: 'john doe' }),
+  );
+  assert.equal(state.players[0].name, 'John Doe');
 });
 
 test('presence remains recoverable until the ten minute expiry', () => {
